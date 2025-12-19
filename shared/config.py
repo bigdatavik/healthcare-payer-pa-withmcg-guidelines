@@ -40,8 +40,7 @@ class PAAgentConfig:
         self.catalog = env_config['catalog']
         self.schema = env_config['schema']
         self.warehouse_id = env_config['warehouse_id']
-        self.vector_endpoint_clinical = env_config['vector_endpoint_clinical']
-        self.vector_endpoint_guidelines = env_config['vector_endpoint_guidelines']
+        self.vector_endpoint = env_config['vector_endpoint']
         self.llm_endpoint = env_config['llm_endpoint']
         self.app_name = env_config['app_name']
         
@@ -151,8 +150,7 @@ def print_config(cfg: PAAgentConfig):
     print(f"Catalog:                 {cfg.catalog}")
     print(f"Schema:                  {cfg.schema}")
     print(f"Warehouse ID:            {cfg.warehouse_id}")
-    print(f"Vector Endpoint Clinical: {cfg.vector_endpoint_clinical}")
-    print(f"Vector Endpoint Guidelines: {cfg.vector_endpoint_guidelines}")
+    print(f"Vector Endpoint:         {cfg.vector_endpoint}")
     print(f"LLM Endpoint:            {cfg.llm_endpoint}")
     print(f"App Name:                {cfg.app_name}")
     print(f"Auth Requests Table:     {cfg.auth_requests_table}")

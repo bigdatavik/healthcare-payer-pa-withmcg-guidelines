@@ -64,10 +64,8 @@ env:
     value: '{env_config['schema']}'
   
   # Vector Search configuration
-  - name: 'VECTOR_ENDPOINT_CLINICAL'
-    value: '{env_config['vector_endpoint_clinical']}'
-  - name: 'VECTOR_ENDPOINT_GUIDELINES'
-    value: '{env_config['vector_endpoint_guidelines']}'
+  - name: 'VECTOR_ENDPOINT'
+    value: '{env_config['vector_endpoint']}'
   
   # LLM configuration
   - name: 'LLM_ENDPOINT'

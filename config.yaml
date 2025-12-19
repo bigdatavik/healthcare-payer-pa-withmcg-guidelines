@@ -13,9 +13,8 @@ environments:
     catalog: "healthcare_payer_pa_withmcg_guidelines_dev"
     schema: "main"
     warehouse_id: "148ccb90800933a1"
-    vector_endpoint_clinical: "pa_clinical_records_endpoint"
-    vector_endpoint_guidelines: "pa_guidelines_endpoint"
-    llm_endpoint: "databricks-meta-llama-3-1-405b-instruct"
+    vector_endpoint: "one-env-shared-endpoint-2"
+    llm_endpoint: "databricks-claude-sonnet-4-5"
     app_name: "pa-dashboard-dev"  # Matches databricks.yml (hyphens, not underscores!)
     
   staging:
@@ -24,9 +23,8 @@ environments:
     catalog: "healthcare_payer_pa_withmcg_guidelines_staging"  # Different catalog for separation
     schema: "main"
     warehouse_id: "148ccb90800933a1"  # Can use same warehouse
-    vector_endpoint_clinical: "pa_clinical_records_endpoint"
-    vector_endpoint_guidelines: "pa_guidelines_endpoint"
-    llm_endpoint: "databricks-meta-llama-3-1-405b-instruct"
+    vector_endpoint: "one-env-shared-endpoint-2"
+    llm_endpoint: "databricks-claude-sonnet-4-5"
     app_name: "pa-dashboard-staging"  # Hyphens, not underscores!
     
   prod:
@@ -35,9 +33,8 @@ environments:
     catalog: "healthcare_payer_pa_withmcg_guidelines_prod"  # Different catalog for separation
     schema: "main"
     warehouse_id: "148ccb90800933a1"  # Can use same warehouse (or different if needed)
-    vector_endpoint_clinical: "pa_clinical_records_endpoint_prod"
-    vector_endpoint_guidelines: "pa_guidelines_endpoint_prod"
-    llm_endpoint: "databricks-meta-llama-3-1-405b-instruct"
+    vector_endpoint: "one-env-shared-endpoint-2"
+    llm_endpoint: "databricks-claude-sonnet-4-5"
     app_name: "pa-dashboard-prod"  # Hyphens, not underscores!
 
 # Common configuration (shared across all environments)

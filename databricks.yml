@@ -21,8 +21,7 @@ targets:
       catalog_name: healthcare_payer_pa_withmcg_guidelines_dev
       schema_name: main
       warehouse_id: 148ccb90800933a1
-      vector_endpoint_clinical: pa_clinical_records_endpoint
-      vector_endpoint_guidelines: pa_guidelines_endpoint
+      vector_endpoint: one-env-shared-endpoint-2
 
   prod:
     mode: production
@@ -32,8 +31,7 @@ targets:
       catalog_name: healthcare_payer_pa_withmcg_guidelines_prod
       schema_name: main
       warehouse_id: 148ccb90800933a1
-      vector_endpoint_clinical: pa_clinical_records_endpoint_prod
-      vector_endpoint_guidelines: pa_guidelines_endpoint_prod
+      vector_endpoint: one-env-shared-endpoint-2
 
 # Variables
 variables:
@@ -43,10 +41,8 @@ variables:
     description: Schema name within catalog
   warehouse_id:
     description: SQL Warehouse ID for queries
-  vector_endpoint_clinical:
-    description: Vector Search endpoint for clinical documents
-  vector_endpoint_guidelines:
-    description: Vector Search endpoint for MCG/InterQual guidelines
+  vector_endpoint:
+    description: Shared Vector Search endpoint for both clinical and guidelines indexes
 
 # Resources
 resources:
@@ -120,7 +116,7 @@ resources:
             base_parameters:
               catalog_name: ${var.catalog_name}
               schema_name: ${var.schema_name}
-              endpoint_name: ${var.vector_endpoint_clinical}
+              endpoint_name: ${var.vector_endpoint}
           timeout_seconds: 1800
 
         - task_key: create_vector_index_guidelines
@@ -132,7 +128,7 @@ resources:
             base_parameters:
               catalog_name: ${var.catalog_name}
               schema_name: ${var.schema_name}
-              endpoint_name: ${var.vector_endpoint_guidelines}
+              endpoint_name: ${var.vector_endpoint}
           timeout_seconds: 1800
 
         - task_key: create_uc_functions
@@ -146,8 +142,7 @@ resources:
               catalog_name: ${var.catalog_name}
               schema_name: ${var.schema_name}
               warehouse_id: ${var.warehouse_id}
-              vector_endpoint_clinical: ${var.vector_endpoint_clinical}
-              vector_endpoint_guidelines: ${var.vector_endpoint_guidelines}
+              vector_endpoint: ${var.vector_endpoint}
           timeout_seconds: 1200
 
         - task_key: test_agent_workflow
@@ -182,7 +177,5 @@ resources:
             value: ${var.catalog_name}
           - name: SCHEMA_NAME
             value: ${var.schema_name}
-          - name: VECTOR_ENDPOINT_CLINICAL
-            value: ${var.vector_endpoint_clinical}
-          - name: VECTOR_ENDPOINT_GUIDELINES
-            value: ${var.vector_endpoint_guidelines}
+          - name: VECTOR_ENDPOINT
+            value: ${var.vector_endpoint}

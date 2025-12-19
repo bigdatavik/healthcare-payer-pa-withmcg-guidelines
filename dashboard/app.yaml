@@ -23,14 +23,12 @@ env:
     value: 'main'
   
   # Vector Search configuration
-  - name: 'VECTOR_ENDPOINT_CLINICAL'
-    value: 'pa_clinical_records_endpoint'
-  - name: 'VECTOR_ENDPOINT_GUIDELINES'
-    value: 'pa_guidelines_endpoint'
+  - name: 'VECTOR_ENDPOINT'
+    value: 'one-env-shared-endpoint-2'
   
   # LLM configuration
   - name: 'LLM_ENDPOINT'
-    value: 'databricks-meta-llama-3-1-405b-instruct'
+    value: 'databricks-claude-sonnet-4-5'
   
   # Environment identifier
   - name: 'ENVIRONMENT'
