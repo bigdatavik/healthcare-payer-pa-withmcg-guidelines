@@ -1,0 +1,47 @@
+# Databricks Asset Bundle Configuration
+# This file configures how your project deploys to Databricks
+# See: https://docs.databricks.com/dev-tools/bundles/index.html
+
+bundle:
+  name: healthcare-payer-pa-withmcg-guidelines
+
+variables:
+  catalog:
+    description: Unity Catalog name
+    default: healthcare-payer-pa-withmcg-guidelines_dev
+  
+  schema:
+    description: Schema name
+    default: main
+
+workspace:
+  host: https://adb-984752964297111.11.azuredatabricks.net
+
+targets:
+  dev:
+    mode: development
+    default: true
+    workspace:
+      root_path: /Workspace/Users/${workspace.current_user.userName}/.bundle/${bundle.name}/dev
+
+# Uncomment and configure resources as needed:
+
+# resources:
+#   jobs:
+#     sample_job:
+#       name: "[dev] Sample Job"
+#       tasks:
+#         - task_key: sample_task
+#           existing_cluster_id: 0304-162117-qgsi1x04
+#           notebook_task:
+#             notebook_path: ./notebooks/sample_notebook.py
+#             base_parameters:
+#               catalog: ${var.catalog}
+#             source: WORKSPACE
+#
+#   apps:
+#     sample_dashboard:
+#       name: ${bundle.name}-dashboard-dev
+#       description: "Sample Streamlit Dashboard (dev)"
+#       source_code_path: ./dashboard
+
