@@ -1,47 +1,188 @@
-# Databricks Asset Bundle Configuration
-# This file configures how your project deploys to Databricks
-# See: https://docs.databricks.com/dev-tools/bundles/index.html
-
 bundle:
   name: healthcare-payer-pa-withmcg-guidelines
 
-variables:
-  catalog:
-    description: Unity Catalog name
-    default: healthcare-payer-pa-withmcg-guidelines_dev
-  
-  schema:
-    description: Schema name
-    default: main
+include:
+  - resources/*.yml
 
+# Workspace configuration
 workspace:
   host: https://adb-984752964297111.11.azuredatabricks.net
+  auth_type: pat
+  profile: DEFAULT_azure
 
+# Target environments
 targets:
   dev:
     mode: development
     default: true
     workspace:
-      root_path: /Workspace/Users/${workspace.current_user.userName}/.bundle/${bundle.name}/dev
+      root_path: /Workspace/Users/${workspace.current_user.userName}/.bundle/${bundle.name}/${bundle.target}
+    variables:
+      catalog_name: healthcare_payer_pa_withmcg_guidelines_dev
+      schema_name: main
+      warehouse_id: 148ccb90800933a1
+      vector_endpoint_clinical: pa_clinical_records_endpoint
+      vector_endpoint_guidelines: pa_guidelines_endpoint
 
-# Uncomment and configure resources as needed:
+  prod:
+    mode: production
+    workspace:
+      root_path: /Workspace/Shared/.bundle/${bundle.name}/${bundle.target}
+    variables:
+      catalog_name: healthcare_payer_pa_withmcg_guidelines_prod
+      schema_name: main
+      warehouse_id: 148ccb90800933a1
+      vector_endpoint_clinical: pa_clinical_records_endpoint_prod
+      vector_endpoint_guidelines: pa_guidelines_endpoint_prod
 
-# resources:
-#   jobs:
-#     sample_job:
-#       name: "[dev] Sample Job"
-#       tasks:
-#         - task_key: sample_task
-#           existing_cluster_id: 0304-162117-qgsi1x04
-#           notebook_task:
-#             notebook_path: ./notebooks/sample_notebook.py
-#             base_parameters:
-#               catalog: ${var.catalog}
-#             source: WORKSPACE
-#
-#   apps:
-#     sample_dashboard:
-#       name: ${bundle.name}-dashboard-dev
-#       description: "Sample Streamlit Dashboard (dev)"
-#       source_code_path: ./dashboard
+# Variables
+variables:
+  catalog_name:
+    description: Unity Catalog name for PA data
+  schema_name:
+    description: Schema name within catalog
+  warehouse_id:
+    description: SQL Warehouse ID for queries
+  vector_endpoint_clinical:
+    description: Vector Search endpoint for clinical documents
+  vector_endpoint_guidelines:
+    description: Vector Search endpoint for MCG/InterQual guidelines
 
+# Resources
+resources:
+  # Setup Job - Creates all resources
+  jobs:
+    pa_setup_job:
+      name: ${bundle.target}_pa_setup
+      job_clusters:
+        - job_cluster_key: main_cluster
+          new_cluster:
+            spark_version: "16.4.x-scala2.12"
+            node_type_id: "Standard_DS3_v2"
+            num_workers: 2
+            spark_conf:
+              "spark.databricks.cluster.profile": "singleNode"
+              "spark.master": "local[*]"
+            custom_tags:
+              project: "prior-authorization"
+              environment: "${bundle.target}"
+
+      tasks:
+        - task_key: create_catalog_schema
+          job_cluster_key: main_cluster
+          notebook_task:
+            notebook_path: ./setup/01_create_catalog_schema.py
+            base_parameters:
+              catalog_name: ${var.catalog_name}
+              schema_name: ${var.schema_name}
+          timeout_seconds: 600
+
+        - task_key: generate_clinical_data
+          job_cluster_key: main_cluster
+          depends_on:
+            - task_key: create_catalog_schema
+          notebook_task:
+            notebook_path: ./setup/02_generate_clinical_data.py
+            base_parameters:
+              catalog_name: ${var.catalog_name}
+              schema_name: ${var.schema_name}
+          timeout_seconds: 1200
+
+        - task_key: generate_guidelines_data
+          job_cluster_key: main_cluster
+          depends_on:
+            - task_key: create_catalog_schema
+          notebook_task:
+            notebook_path: ./setup/03_generate_guidelines_data.py
+            base_parameters:
+              catalog_name: ${var.catalog_name}
+              schema_name: ${var.schema_name}
+          timeout_seconds: 1200
+
+        - task_key: generate_pa_requests
+          job_cluster_key: main_cluster
+          depends_on:
+            - task_key: generate_clinical_data
+            - task_key: generate_guidelines_data
+          notebook_task:
+            notebook_path: ./setup/04_generate_pa_requests.py
+            base_parameters:
+              catalog_name: ${var.catalog_name}
+              schema_name: ${var.schema_name}
+          timeout_seconds: 600
+
+        - task_key: create_vector_index_clinical
+          job_cluster_key: main_cluster
+          depends_on:
+            - task_key: generate_clinical_data
+          notebook_task:
+            notebook_path: ./setup/05_create_vector_index_clinical.py
+            base_parameters:
+              catalog_name: ${var.catalog_name}
+              schema_name: ${var.schema_name}
+              endpoint_name: ${var.vector_endpoint_clinical}
+          timeout_seconds: 1800
+
+        - task_key: create_vector_index_guidelines
+          job_cluster_key: main_cluster
+          depends_on:
+            - task_key: generate_guidelines_data
+          notebook_task:
+            notebook_path: ./setup/06_create_vector_index_guidelines.py
+            base_parameters:
+              catalog_name: ${var.catalog_name}
+              schema_name: ${var.schema_name}
+              endpoint_name: ${var.vector_endpoint_guidelines}
+          timeout_seconds: 1800
+
+        - task_key: create_uc_functions
+          job_cluster_key: main_cluster
+          depends_on:
+            - task_key: create_vector_index_clinical
+            - task_key: create_vector_index_guidelines
+          notebook_task:
+            notebook_path: ./setup/07_create_uc_functions.py
+            base_parameters:
+              catalog_name: ${var.catalog_name}
+              schema_name: ${var.schema_name}
+              warehouse_id: ${var.warehouse_id}
+              vector_endpoint_clinical: ${var.vector_endpoint_clinical}
+              vector_endpoint_guidelines: ${var.vector_endpoint_guidelines}
+          timeout_seconds: 1200
+
+        - task_key: test_agent_workflow
+          job_cluster_key: main_cluster
+          depends_on:
+            - task_key: create_uc_functions
+          notebook_task:
+            notebook_path: ./setup/08_test_agent_workflow.py
+            base_parameters:
+              catalog_name: ${var.catalog_name}
+              schema_name: ${var.schema_name}
+          timeout_seconds: 600
+
+  # Databricks App - Streamlit Dashboard
+  apps:
+    pa_dashboard:
+      name: ${bundle.target}_pa_dashboard
+      description: "Prior Authorization AI Agent Dashboard"
+      resources:
+        - name: pa-dashboard-job
+          description: "Main dashboard app"
+          job:
+            id: ${resources.jobs.pa_setup_job.id}
+      config:
+        command: ["streamlit", "run", "app.py"]
+        env:
+          - name: DATABRICKS_HOST
+            value: "adb-984752964297111.11.azuredatabricks.net"
+          - name: DATABRICKS_WAREHOUSE_ID
+            value: ${var.warehouse_id}
+          - name: CATALOG_NAME
+            value: ${var.catalog_name}
+          - name: SCHEMA_NAME
+            value: ${var.schema_name}
+          - name: VECTOR_ENDPOINT_CLINICAL
+            value: ${var.vector_endpoint_clinical}
+          - name: VECTOR_ENDPOINT_GUIDELINES
+            value: ${var.vector_endpoint_guidelines}

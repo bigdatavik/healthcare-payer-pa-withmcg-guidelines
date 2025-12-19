@@ -1,0 +1,61 @@
+# Prior Authorization Agent - Deployment Configuration
+# ✅ THIS IS THE ONLY FILE YOU NEED TO EDIT
+# Change values here - notebooks and app automatically read from this file
+
+# Default environment (used when no PA_ENV variable set)
+default_environment: dev
+
+environments:
+  # All environments in same workspace, separated by catalog names
+  dev:
+    workspace_host: "https://adb-984752964297111.11.azuredatabricks.net"
+    profile: "DEFAULT_azure"
+    catalog: "healthcare_payer_pa_withmcg_guidelines_dev"
+    schema: "main"
+    warehouse_id: "148ccb90800933a1"
+    vector_endpoint_clinical: "pa_clinical_records_endpoint"
+    vector_endpoint_guidelines: "pa_guidelines_endpoint"
+    llm_endpoint: "databricks-meta-llama-3-1-405b-instruct"
+    app_name: "pa-dashboard-dev"  # Matches databricks.yml (hyphens, not underscores!)
+    
+  staging:
+    workspace_host: "https://adb-984752964297111.11.azuredatabricks.net"  # Same workspace as dev
+    profile: "DEFAULT_azure"  # Same profile
+    catalog: "healthcare_payer_pa_withmcg_guidelines_staging"  # Different catalog for separation
+    schema: "main"
+    warehouse_id: "148ccb90800933a1"  # Can use same warehouse
+    vector_endpoint_clinical: "pa_clinical_records_endpoint"
+    vector_endpoint_guidelines: "pa_guidelines_endpoint"
+    llm_endpoint: "databricks-meta-llama-3-1-405b-instruct"
+    app_name: "pa-dashboard-staging"  # Hyphens, not underscores!
+    
+  prod:
+    workspace_host: "https://adb-984752964297111.11.azuredatabricks.net"  # Same workspace as dev
+    profile: "DEFAULT_azure"  # Same profile
+    catalog: "healthcare_payer_pa_withmcg_guidelines_prod"  # Different catalog for separation
+    schema: "main"
+    warehouse_id: "148ccb90800933a1"  # Can use same warehouse (or different if needed)
+    vector_endpoint_clinical: "pa_clinical_records_endpoint_prod"
+    vector_endpoint_guidelines: "pa_guidelines_endpoint_prod"
+    llm_endpoint: "databricks-meta-llama-3-1-405b-instruct"
+    app_name: "pa-dashboard-prod"  # Hyphens, not underscores!
+
+# Common configuration (shared across all environments)
+common:
+  spark_version: "16.4.x-scala2.12"
+  node_type: "Standard_DS3_v2"
+  num_workers: 2
+  
+  # Data generation settings
+  num_patients: 50
+  num_pa_requests: 30
+  
+  # Vector search settings
+  embedding_model: "databricks-gte-large-en"
+  sync_type: "TRIGGERED"
+  
+  # Decision thresholds
+  auto_approve_threshold: 0.80  # 80%+ criteria met → APPROVED
+  manual_review_threshold: 0.60  # 60-80% → MANUAL_REVIEW
+  # Below 60% → DENIED
+

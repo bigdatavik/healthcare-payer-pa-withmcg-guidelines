@@ -1,0 +1,47 @@
+# ✅ CORRECT - Official Microsoft Pattern (per MY_ENVIRONMENT)
+# 🤖 AUTO-GENERATED from config.yaml - DO NOT EDIT DIRECTLY!
+# Run: python generate_app_yaml.py dev
+#
+# To use these values in your code:
+#   import os
+#   catalog = os.getenv("CATALOG_NAME")
+#   schema = os.getenv("SCHEMA_NAME")
+
+command: ['streamlit', 'run', 'app.py']
+
+env:
+  # Core Databricks connection
+  - name: 'DATABRICKS_HOST'
+    value: 'adb-984752964297111.11.azuredatabricks.net'
+  - name: 'DATABRICKS_WAREHOUSE_ID'
+    value: '148ccb90800933a1'
+  
+  # Unity Catalog configuration
+  - name: 'CATALOG_NAME'
+    value: 'healthcare_payer_pa_withmcg_guidelines_dev'
+  - name: 'SCHEMA_NAME'
+    value: 'main'
+  
+  # Vector Search configuration
+  - name: 'VECTOR_ENDPOINT_CLINICAL'
+    value: 'pa_clinical_records_endpoint'
+  - name: 'VECTOR_ENDPOINT_GUIDELINES'
+    value: 'pa_guidelines_endpoint'
+  
+  # LLM configuration
+  - name: 'LLM_ENDPOINT'
+    value: 'databricks-meta-llama-3-1-405b-instruct'
+  
+  # Environment identifier
+  - name: 'ENVIRONMENT'
+    value: 'dev'
+  
+  # Embedding model for vector search
+  - name: 'EMBEDDING_MODEL'
+    value: 'databricks-gte-large-en'
+  
+  # Decision thresholds
+  - name: 'AUTO_APPROVE_THRESHOLD'
+    value: '0.8'
+  - name: 'MANUAL_REVIEW_THRESHOLD'
+    value: '0.6'
