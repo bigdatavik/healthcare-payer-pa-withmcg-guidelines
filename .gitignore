@@ -1,6 +1,7 @@
 # Documentation (keep private)
 docs/
 MY_ENVIRONMENT.md
+.cursor/plans/
 
 # Fraudtemplate (template files - symlink)
 .fraudtemplate
