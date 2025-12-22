@@ -15,44 +15,66 @@ environments:
     warehouse_id: "148ccb90800933a1"
     vector_endpoint: "one-env-shared-endpoint-2"
     llm_endpoint: "databricks-claude-sonnet-4-5"
-    app_name: "pa-dashboard-dev"  # Matches databricks.yml (hyphens, not underscores!)
-    
+    app_name: "pa-dashboard-dev" # Matches databricks.yml (hyphens, not underscores!)
+    genie_space_id: "" # Optional: Auto-discovered from config_genie table
+
+    # Volumes for raw documents (before chunking)
+    volume_clinical: "clinical_records_raw"
+    volume_guidelines: "guidelines_raw"
+
   staging:
-    workspace_host: "https://adb-984752964297111.11.azuredatabricks.net"  # Same workspace as dev
-    profile: "DEFAULT_azure"  # Same profile
-    catalog: "healthcare_payer_pa_withmcg_guidelines_staging"  # Different catalog for separation
+    workspace_host: "https://adb-984752964297111.11.azuredatabricks.net" # Same workspace as dev
+    profile: "DEFAULT_azure" # Same profile
+    catalog: "healthcare_payer_pa_withmcg_guidelines_staging" # Different catalog for separation
     schema: "main"
-    warehouse_id: "148ccb90800933a1"  # Can use same warehouse
+    warehouse_id: "148ccb90800933a1" # Can use same warehouse
     vector_endpoint: "one-env-shared-endpoint-2"
     llm_endpoint: "databricks-claude-sonnet-4-5"
-    app_name: "pa-dashboard-staging"  # Hyphens, not underscores!
-    
+    app_name: "pa-dashboard-staging" # Hyphens, not underscores!
+    genie_space_id: "" # Optional: Auto-discovered from config_genie table
+
+    # Volumes for raw documents
+    volume_clinical: "clinical_records_raw"
+    volume_guidelines: "guidelines_raw"
+
   prod:
-    workspace_host: "https://adb-984752964297111.11.azuredatabricks.net"  # Same workspace as dev
-    profile: "DEFAULT_azure"  # Same profile
-    catalog: "healthcare_payer_pa_withmcg_guidelines_prod"  # Different catalog for separation
+    workspace_host: "https://adb-984752964297111.11.azuredatabricks.net" # Same workspace as dev
+    profile: "DEFAULT_azure" # Same profile
+    catalog: "healthcare_payer_pa_withmcg_guidelines_prod" # Different catalog for separation
     schema: "main"
-    warehouse_id: "148ccb90800933a1"  # Can use same warehouse (or different if needed)
+    warehouse_id: "148ccb90800933a1" # Can use same warehouse (or different if needed)
     vector_endpoint: "one-env-shared-endpoint-2"
     llm_endpoint: "databricks-claude-sonnet-4-5"
-    app_name: "pa-dashboard-prod"  # Hyphens, not underscores!
+    app_name: "pa-dashboard-prod" # Hyphens, not underscores!
+    genie_space_id: "" # Optional: Auto-discovered from config_genie table
+
+    # Volumes for raw documents
+    volume_clinical: "clinical_records_raw"
+    volume_guidelines: "guidelines_raw"
 
 # Common configuration (shared across all environments)
 common:
   spark_version: "16.4.x-scala2.12"
   node_type: "Standard_DS3_v2"
   num_workers: 2
-  
+
   # Data generation settings
   num_patients: 50
   num_pa_requests: 30
-  
+
   # Vector search settings
   embedding_model: "databricks-gte-large-en"
   sync_type: "TRIGGERED"
-  
+
+  # Chunking settings (for optimal vector search)
+  min_chunk_size: 800 # Minimum characters per chunk
+  max_chunk_size: 1500 # Maximum characters per chunk
+
   # Decision thresholds
-  auto_approve_threshold: 0.80  # 80%+ criteria met → APPROVED
-  manual_review_threshold: 0.60  # 60-80% → MANUAL_REVIEW
+  auto_approve_threshold: 0.80 # 80%+ criteria met → APPROVED
+  manual_review_threshold: 0.60 # 60-80% → MANUAL_REVIEW
   # Below 60% → DENIED
 
+  # Genie Space settings (for natural language queries)
+  genie_display_name: "Prior Authorization Analytics"
+  genie_description: "Natural language queries for PA requests, patient records, and clinical guidelines"

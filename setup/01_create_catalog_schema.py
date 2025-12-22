@@ -4,26 +4,37 @@
 # MAGIC
 # MAGIC This notebook creates the Unity Catalog and schema for the Prior Authorization Agent.
 # MAGIC
+# MAGIC **Configuration:** Reads from config.yaml via shared.config module
+# MAGIC
 # MAGIC **Resources Created:**
-# MAGIC - Unity Catalog: `healthcare_payer_pa_withmcg_guidelines_dev`
-# MAGIC - Schema: `main`
+# MAGIC - Unity Catalog
+# MAGIC - Schema
 # MAGIC - Tables: `authorization_requests`, `patient_clinical_records`, `clinical_guidelines`
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Get Parameters
+# MAGIC ## Import Configuration
 
 # COMMAND ----------
 
-dbutils.widgets.text("catalog_name", "healthcare_payer_pa_withmcg_guidelines_dev", "Catalog Name")
-dbutils.widgets.text("schema_name", "main", "Schema Name")
+import sys
+import os
+sys.path.append(os.path.abspath('..'))
+from shared.config import get_config, print_config
 
-catalog_name = dbutils.widgets.get("catalog_name")
-schema_name = dbutils.widgets.get("schema_name")
+cfg = get_config()
+print_config(cfg)
 
-print(f"Catalog: {catalog_name}")
-print(f"Schema: {schema_name}")
+# COMMAND ----------
+
+# Use config values
+catalog_name = cfg.catalog
+schema_name = cfg.schema
+
+print(f"📊 Creating catalog and schema:")
+print(f"   Catalog: {catalog_name}")
+print(f"   Schema: {schema_name}")
 
 # COMMAND ----------
 
@@ -58,6 +69,33 @@ print(f"✅ Schema '{catalog_name}.{schema_name}' created/verified")
 # COMMAND ----------
 
 # MAGIC %md
+# MAGIC ## Create Volumes for Raw Documents
+
+# COMMAND ----------
+
+# Create volume for clinical records (before chunking)
+spark.sql(f"""
+CREATE VOLUME IF NOT EXISTS {catalog_name}.{schema_name}.{cfg.volume_clinical}
+COMMENT 'Raw clinical documents before chunking for vector search'
+""")
+
+print(f"✅ Volume '{cfg.volume_clinical}' created")
+print(f"   Path: {cfg.clinical_volume_path}")
+
+# COMMAND ----------
+
+# Create volume for guidelines (before chunking)
+spark.sql(f"""
+CREATE VOLUME IF NOT EXISTS {catalog_name}.{schema_name}.{cfg.volume_guidelines}
+COMMENT 'Raw MCG/InterQual guideline documents before chunking'
+""")
+
+print(f"✅ Volume '{cfg.volume_guidelines}' created")
+print(f"   Path: {cfg.guidelines_volume_path}")
+
+# COMMAND ----------
+
+# MAGIC %md
 # MAGIC ## Create Tables
 
 # COMMAND ----------
@@ -86,8 +124,8 @@ CREATE TABLE IF NOT EXISTS {catalog_name}.{schema_name}.authorization_requests (
   mcg_code STRING COMMENT 'MCG guideline code used',
   explanation STRING COMMENT 'Human-readable decision explanation',
   reviewed_by STRING COMMENT 'Nurse ID if manual review',
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP(),
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP()
+  created_at TIMESTAMP,
+  updated_at TIMESTAMP
 )
 USING DELTA
 COMMENT 'Prior authorization requests and decisions'
@@ -112,9 +150,10 @@ CREATE TABLE IF NOT EXISTS {catalog_name}.{schema_name}.patient_clinical_records
   source_system STRING COMMENT 'Epic, Cerner, etc',
   provider_id STRING,
   metadata STRING COMMENT 'JSON metadata',
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP()
+  created_at TIMESTAMP
 )
 USING DELTA
+TBLPROPERTIES ('delta.enableChangeDataFeed' = 'true')
 COMMENT 'Patient clinical documents for Vector Store 1 (semantic search)'
 """)
 
@@ -140,9 +179,10 @@ CREATE TABLE IF NOT EXISTS {catalog_name}.{schema_name}.clinical_guidelines (
   decision_criteria STRING COMMENT 'Approval/denial logic',
   effective_date DATE,
   tags STRING COMMENT 'Comma-separated tags',
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP()
+  created_at TIMESTAMP
 )
 USING DELTA
+TBLPROPERTIES ('delta.enableChangeDataFeed' = 'true')
 COMMENT 'MCG, InterQual, and Medicare guidelines for Vector Store 2'
 """)
 
@@ -171,4 +211,3 @@ for table in ["authorization_requests", "patient_clinical_records", "clinical_gu
 # COMMAND ----------
 
 print("✅ Setup 01 Complete: Catalog and Schema created successfully!")
-

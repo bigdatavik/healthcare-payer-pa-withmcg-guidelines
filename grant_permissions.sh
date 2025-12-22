@@ -60,3 +60,4 @@ echo "   1. Get app URL: databricks apps get $APP_NAME --profile $PROFILE"
 echo "   2. Open app in browser"
 echo "   3. Test authorization workflow"
 
+

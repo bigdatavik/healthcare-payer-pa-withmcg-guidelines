@@ -35,3 +35,4 @@ echo "   1. Get app URL: databricks apps get $APP_NAME --profile $PROFILE"
 echo "   2. Grant permissions: ./grant_permissions.sh"
 echo "   3. Test the app in your browser"
 
+

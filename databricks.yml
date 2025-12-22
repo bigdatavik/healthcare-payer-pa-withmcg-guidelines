@@ -1,13 +1,9 @@
 bundle:
   name: healthcare-payer-pa-withmcg-guidelines
 
-include:
-  - resources/*.yml
-
 # Workspace configuration
 workspace:
   host: https://adb-984752964297111.11.azuredatabricks.net
-  auth_type: pat
   profile: DEFAULT_azure
 
 # Target environments
@@ -15,9 +11,8 @@ targets:
   dev:
     mode: development
     default: true
-    workspace:
-      root_path: /Workspace/Users/${workspace.current_user.userName}/.bundle/${bundle.name}/${bundle.target}
     variables:
+      environment: dev
       catalog_name: healthcare_payer_pa_withmcg_guidelines_dev
       schema_name: main
       warehouse_id: 148ccb90800933a1
@@ -25,9 +20,8 @@ targets:
 
   prod:
     mode: production
-    workspace:
-      root_path: /Workspace/Shared/.bundle/${bundle.name}/${bundle.target}
     variables:
+      environment: prod
       catalog_name: healthcare_payer_pa_withmcg_guidelines_prod
       schema_name: main
       warehouse_id: 148ccb90800933a1
@@ -35,6 +29,8 @@ targets:
 
 # Variables
 variables:
+  environment:
+    description: "Environment (dev/prod)"
   catalog_name:
     description: Unity Catalog name for PA data
   schema_name:
@@ -49,7 +45,7 @@ resources:
   # Setup Job - Creates all resources
   jobs:
     pa_setup_job:
-      name: ${bundle.target}_pa_setup
+      name: pa_setup_${var.environment}
       job_clusters:
         - job_cluster_key: main_cluster
           new_cluster:
@@ -73,23 +69,45 @@ resources:
               schema_name: ${var.schema_name}
           timeout_seconds: 600
 
-        - task_key: generate_clinical_data
+        - task_key: generate_clinical_documents
           job_cluster_key: main_cluster
           depends_on:
             - task_key: create_catalog_schema
           notebook_task:
-            notebook_path: ./setup/02_generate_clinical_data.py
+            notebook_path: ./setup/02_generate_clinical_documents.py
             base_parameters:
               catalog_name: ${var.catalog_name}
               schema_name: ${var.schema_name}
           timeout_seconds: 1200
 
-        - task_key: generate_guidelines_data
+        - task_key: chunk_clinical_records
+          job_cluster_key: main_cluster
+          depends_on:
+            - task_key: generate_clinical_documents
+          notebook_task:
+            notebook_path: ./setup/02a_chunk_clinical_records.py
+            base_parameters:
+              catalog_name: ${var.catalog_name}
+              schema_name: ${var.schema_name}
+          timeout_seconds: 1200
+
+        - task_key: generate_guidelines_documents
           job_cluster_key: main_cluster
           depends_on:
             - task_key: create_catalog_schema
           notebook_task:
-            notebook_path: ./setup/03_generate_guidelines_data.py
+            notebook_path: ./setup/03_generate_guidelines_documents.py
+            base_parameters:
+              catalog_name: ${var.catalog_name}
+              schema_name: ${var.schema_name}
+          timeout_seconds: 1200
+
+        - task_key: chunk_guidelines
+          job_cluster_key: main_cluster
+          depends_on:
+            - task_key: generate_guidelines_documents
+          notebook_task:
+            notebook_path: ./setup/03a_chunk_guidelines.py
             base_parameters:
               catalog_name: ${var.catalog_name}
               schema_name: ${var.schema_name}
@@ -98,8 +116,8 @@ resources:
         - task_key: generate_pa_requests
           job_cluster_key: main_cluster
           depends_on:
-            - task_key: generate_clinical_data
-            - task_key: generate_guidelines_data
+            - task_key: chunk_clinical_records
+            - task_key: chunk_guidelines
           notebook_task:
             notebook_path: ./setup/04_generate_pa_requests.py
             base_parameters:
@@ -110,7 +128,7 @@ resources:
         - task_key: create_vector_index_clinical
           job_cluster_key: main_cluster
           depends_on:
-            - task_key: generate_clinical_data
+            - task_key: chunk_clinical_records
           notebook_task:
             notebook_path: ./setup/05_create_vector_index_clinical.py
             base_parameters:
@@ -122,7 +140,7 @@ resources:
         - task_key: create_vector_index_guidelines
           job_cluster_key: main_cluster
           depends_on:
-            - task_key: generate_guidelines_data
+            - task_key: chunk_guidelines
           notebook_task:
             notebook_path: ./setup/06_create_vector_index_guidelines.py
             base_parameters:
@@ -131,26 +149,72 @@ resources:
               endpoint_name: ${var.vector_endpoint}
           timeout_seconds: 1800
 
-        - task_key: create_uc_functions
+        - task_key: uc_extract_criteria
           job_cluster_key: main_cluster
           depends_on:
-            - task_key: create_vector_index_clinical
-            - task_key: create_vector_index_guidelines
+            - task_key: create_catalog_schema
           notebook_task:
-            notebook_path: ./setup/07_create_uc_functions.py
+            notebook_path: ./setup/07c_uc_extract_criteria.py
             base_parameters:
               catalog_name: ${var.catalog_name}
               schema_name: ${var.schema_name}
-              warehouse_id: ${var.warehouse_id}
-              vector_endpoint: ${var.vector_endpoint}
-          timeout_seconds: 1200
+          timeout_seconds: 600
+
+        - task_key: uc_check_mcg
+          job_cluster_key: main_cluster
+          depends_on:
+            - task_key: chunk_guidelines
+          notebook_task:
+            notebook_path: ./setup/07d_uc_check_mcg.py
+            base_parameters:
+              catalog_name: ${var.catalog_name}
+              schema_name: ${var.schema_name}
+          timeout_seconds: 600
+
+        - task_key: uc_answer_mcg
+          job_cluster_key: main_cluster
+          depends_on:
+            - task_key: create_catalog_schema
+          notebook_task:
+            notebook_path: ./setup/07e_uc_answer_mcg.py
+            base_parameters:
+              catalog_name: ${var.catalog_name}
+              schema_name: ${var.schema_name}
+          timeout_seconds: 600
+
+        - task_key: uc_explain_decision
+          job_cluster_key: main_cluster
+          depends_on:
+            - task_key: create_catalog_schema
+          notebook_task:
+            notebook_path: ./setup/07f_uc_explain_decision.py
+            base_parameters:
+              catalog_name: ${var.catalog_name}
+              schema_name: ${var.schema_name}
+          timeout_seconds: 600
 
         - task_key: test_agent_workflow
           job_cluster_key: main_cluster
           depends_on:
-            - task_key: create_uc_functions
+            - task_key: create_vector_index_clinical
+            - task_key: create_vector_index_guidelines
+            - task_key: uc_extract_criteria
+            - task_key: uc_check_mcg
+            - task_key: uc_answer_mcg
+            - task_key: uc_explain_decision
           notebook_task:
             notebook_path: ./setup/08_test_agent_workflow.py
+            base_parameters:
+              catalog_name: ${var.catalog_name}
+              schema_name: ${var.schema_name}
+          timeout_seconds: 600
+
+        - task_key: create_genie_space
+          job_cluster_key: main_cluster
+          depends_on:
+            - task_key: generate_pa_requests
+          notebook_task:
+            notebook_path: ./setup/09_create_genie_space.py
             base_parameters:
               catalog_name: ${var.catalog_name}
               schema_name: ${var.schema_name}
@@ -159,23 +223,6 @@ resources:
   # Databricks App - Streamlit Dashboard
   apps:
     pa_dashboard:
-      name: ${bundle.target}_pa_dashboard
-      description: "Prior Authorization AI Agent Dashboard"
-      resources:
-        - name: pa-dashboard-job
-          description: "Main dashboard app"
-          job:
-            id: ${resources.jobs.pa_setup_job.id}
-      config:
-        command: ["streamlit", "run", "app.py"]
-        env:
-          - name: DATABRICKS_HOST
-            value: "adb-984752964297111.11.azuredatabricks.net"
-          - name: DATABRICKS_WAREHOUSE_ID
-            value: ${var.warehouse_id}
-          - name: CATALOG_NAME
-            value: ${var.catalog_name}
-          - name: SCHEMA_NAME
-            value: ${var.schema_name}
-          - name: VECTOR_ENDPOINT
-            value: ${var.vector_endpoint}
+      name: pa-dashboard-${bundle.target}
+      description: "Prior Authorization AI Agent Dashboard - ${bundle.target}"
+      source_code_path: ./dashboard
