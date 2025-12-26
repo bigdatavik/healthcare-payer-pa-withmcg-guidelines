@@ -258,6 +258,263 @@ MEDICAL NECESSITY:
             {"question": "NSAIDs trial completed?", "required": True},
             {"question": "If BMI>30, weight loss attempted?", "required": True}
         ])
+    },
+    # ========================================
+    # ADDITIONAL GUIDELINES FOR DEMO PATIENTS
+    # ========================================
+    {
+        "guideline_id": "MCG-A-0542",
+        "platform": "MCG",
+        "category": "IMAGING",
+        "procedure_code": "72148",
+        "diagnosis_code": "M54.5",
+        "title": "MCG: MRI Lumbar Spine Without Contrast",
+        "content": """MCG CARE GUIDELINES - MRI LUMBAR SPINE (CPT 72148)
+
+INDICATION:
+Low back pain with radiculopathy or red flag symptoms
+
+CLINICAL CRITERIA:
+
+1. RED FLAGS (Any one present → APPROVE immediately)
+   ☐ Progressive motor weakness or neurological deficit
+   ☐ Cauda equina symptoms (bowel/bladder dysfunction, saddle anesthesia)
+   ☐ Suspected infection or malignancy
+   ☐ History of cancer with new back pain
+   ☐ Significant trauma
+   
+   OR
+
+2. RADICULOPATHY WITH CONSERVATIVE TREATMENT FAILURE
+   ☐ Dermatomal pain distribution
+   ☐ Positive straight leg raise or neurological signs
+   ☐ Conservative treatment for 6+ weeks (PT, medications)
+   ☐ Persistent or worsening symptoms
+   ☐ Surgical evaluation being considered
+   
+3. PRE-OPERATIVE PLANNING
+   ☐ Surgery planned for confirmed diagnosis
+   ☐ MRI needed for surgical planning
+
+EXCLUSION CRITERIA:
+- Mechanical low back pain without radiculopathy and no red flags
+- < 6 weeks conservative treatment (unless red flags present)
+- Recent MRI available (< 6 months)
+
+APPROVAL CRITERIA:
+✓ Red flags present OR radiculopathy with failed conservative Rx → APPROVED
+✗ Mechanical pain only, no red flags, insufficient conservative Rx → DENIED
+""",
+        "questionnaire": json.dumps([
+            {"question": "Are red flags present (progressive weakness, cauda equina, trauma, cancer)?", "required": True},
+            {"question": "If no red flags, is radiculopathy present with dermatomal pain?", "required": True},
+            {"question": "If no red flags, has conservative treatment been tried for 6+ weeks?", "required": True}
+        ])
+    },
+    {
+        "guideline_id": "MCG-A-0789",
+        "platform": "MCG",
+        "category": "IMAGING",
+        "procedure_code": "73221",
+        "diagnosis_code": "M75.100",
+        "title": "MCG: MRI Shoulder Without Contrast",
+        "content": """MCG CARE GUIDELINES - MRI SHOULDER (CPT 73221)
+
+INDICATION:
+Suspected rotator cuff tear or internal shoulder derangement
+
+CLINICAL CRITERIA:
+
+1. CLINICAL EXAMINATION
+   ☐ Positive impingement signs (Hawkins, Neer)
+   ☐ Weakness or pain with ROM testing
+   ☐ Failed conservative treatment (6+ weeks)
+   ☐ Physical therapy completed (minimum 6 weeks)
+   
+2. IMAGING CONFIRMATION NEEDED FOR
+   ☐ Surgical planning for suspected rotator cuff tear
+   ☐ X-ray non-diagnostic or normal
+   ☐ Clinical suspicion of labral tear or other pathology
+   
+3. CONSERVATIVE TREATMENT DOCUMENTED
+   ☐ Physical therapy: 6+ weeks (typically 8-12 sessions)
+   ☐ NSAIDs trial: 4+ weeks
+   ☐ Activity modification
+   ☐ Home exercise program
+
+EXCLUSION CRITERIA:
+- Insufficient conservative treatment (< 6 weeks)
+- Resolved symptoms
+- Recent MRI available (< 6 months)
+
+APPROVAL CRITERIA:
+✓ 6+ weeks PT + persistent symptoms + surgical consideration → APPROVED
+⚠ 4-6 weeks PT (borderline) → MANUAL REVIEW
+✗ < 4 weeks PT or resolved symptoms → DENIED
+""",
+        "questionnaire": json.dumps([
+            {"question": "Has patient completed 6+ weeks physical therapy?", "required": True},
+            {"question": "Are symptoms persistent despite conservative treatment?", "required": True},
+            {"question": "Is surgical evaluation being considered?", "required": True}
+        ])
+    },
+    {
+        "guideline_id": "MCG-A-0621",
+        "platform": "MCG",
+        "category": "OUTPATIENT_PROCEDURE",
+        "procedure_code": "29914",
+        "diagnosis_code": "M24.051",
+        "title": "MCG: Hip Arthroscopy with Labral Repair",
+        "content": """MCG CARE GUIDELINES - HIP ARTHROSCOPY (CPT 29914)
+
+INDICATION:
+Symptomatic hip labral tear or femoroacetabular impingement (FAI)
+
+CLINICAL CRITERIA (ALL must be met):
+
+1. CLINICAL FINDINGS
+   ☐ Mechanical symptoms (clicking, catching, pain with motion)
+   ☐ Positive FABER test or anterior impingement test
+   ☐ Failed conservative treatment (8+ weeks)
+   
+2. IMAGING CONFIRMATION
+   ☐ MRI arthrogram confirming labral tear (REQUIRED)
+   ☐ X-ray to assess for FAI morphology or dysplasia
+   ☐ Advanced imaging showing intra-articular pathology
+   
+3. CONSERVATIVE TREATMENT
+   ☐ Physical therapy: 8+ weeks
+   ☐ Activity modification
+   ☐ NSAIDs trial
+   ☐ May include intra-articular injection
+
+EXCLUSION CRITERIA:
+- Severe osteoarthritis (Grade 3-4) - better candidate for replacement
+- No MRI confirmation of labral tear
+- Insufficient conservative treatment
+
+APPROVAL CRITERIA:
+✓ MRI confirms labral tear + 8+ weeks conservative Rx → APPROVED
+⚠ Clinical suspicion but no MRI confirmation → MANUAL REVIEW (MRI required first)
+✗ No imaging confirmation or insufficient conservative Rx → DENIED
+""",
+        "questionnaire": json.dumps([
+            {"question": "Has patient completed 8+ weeks conservative treatment including PT?", "required": True},
+            {"question": "Is MRI arthrogram confirmation of labral tear present?", "required": True},
+            {"question": "Is severe osteoarthritis (Grade 3-4) present?", "required": True, "deny_if": "yes"}
+        ])
+    },
+    {
+        "guideline_id": "MCG-A-0934",
+        "platform": "MCG",
+        "category": "INPATIENT_PROCEDURE",
+        "procedure_code": "22630",
+        "diagnosis_code": "M51.26",
+        "title": "MCG: Lumbar Spinal Fusion",
+        "content": """MCG CARE GUIDELINES - LUMBAR SPINAL FUSION (CPT 22630)
+
+INDICATION:
+Spinal instability, spondylolisthesis, or refractory radiculopathy
+
+CLINICAL CRITERIA (ALL must be met):
+
+1. NEUROLOGICAL FINDINGS
+   ☐ Radiculopathy with objective neurological deficits (motor weakness, sensory loss, reflex changes)
+   ☐ Dermatomal pain distribution
+   ☐ Positive nerve tension signs
+   
+   OR
+   
+   ☐ Documented spinal instability or spondylolisthesis Grade 2+
+   
+2. IMAGING CONFIRMATION
+   ☐ MRI showing nerve compression at specific level(s)
+   ☐ X-ray showing instability, spondylolisthesis, or structural abnormality
+   ☐ Correlation between imaging and clinical findings
+   
+3. CONSERVATIVE TREATMENT FAILURE
+   ☐ Comprehensive conservative treatment: 12+ weeks minimum
+   ☐ Physical therapy: extensive program (12+ weeks)
+   ☐ Epidural steroid injections considered/tried
+   ☐ Medications: NSAIDs, neuropathic pain medications
+   
+4. FUNCTIONAL IMPAIRMENT
+   ☐ Significant impact on quality of life and function
+   ☐ Unable to work or perform ADLs
+
+EXCLUSION CRITERIA:
+- Mechanical low back pain WITHOUT radiculopathy or instability
+- No objective neurological findings
+- No nerve compression on imaging
+- Insufficient conservative treatment
+- Psychosocial factors predominant
+
+APPROVAL CRITERIA:
+✗ No neurological deficits + no imaging showing nerve compression → DENIED
+✗ No/minimal conservative treatment attempted → DENIED
+✓ Neurological deficits + imaging confirms compression + 12+ weeks failed Rx → APPROVED
+""",
+        "questionnaire": json.dumps([
+            {"question": "Are objective neurological deficits present (motor weakness, sensory loss, reflex changes)?", "required": True},
+            {"question": "Does MRI show nerve compression at the affected level?", "required": True},
+            {"question": "Has comprehensive conservative treatment been attempted for 12+ weeks?", "required": True},
+            {"question": "Is spinal instability or spondylolisthesis Grade 2+ present?", "required": False}
+        ])
+    },
+    {
+        "guideline_id": "MCG-A-1124",
+        "platform": "MCG",
+        "category": "OUTPATIENT_PROCEDURE",
+        "procedure_code": "15830",
+        "diagnosis_code": "L90.6",
+        "title": "MCG: Panniculectomy (Excision of Excessive Skin)",
+        "content": """MCG CARE GUIDELINES - PANNICULECTOMY (CPT 15830)
+
+INDICATION:
+Massive weight loss resulting in pannus causing functional impairment or medical complications
+
+CLINICAL CRITERIA (ALL must be met for coverage):
+
+1. FUNCTIONAL IMPAIRMENT (REQUIRED)
+   ☐ Pannus interferes with ambulation or mobility
+   ☐ Difficulty with personal hygiene due to pannus
+   ☐ Pannus causes chronic back, hip, or joint pain documented
+   
+   AND/OR
+
+2. MEDICAL COMPLICATIONS (REQUIRED)
+   ☐ Recurrent intertrigo or skin infections under pannus (3+ episodes in 12 months)
+   ☐ Chronic skin ulceration or breakdown
+   ☐ Documented rashes requiring medical treatment
+   
+3. WEIGHT STABILITY (REQUIRED)
+   ☐ BMI < 35 OR stable weight for 12+ months post-bariatric surgery
+   ☐ No active weight loss program underway
+   ☐ Weight management documented
+   
+4. DOCUMENTATION
+   ☐ Photos showing pannus and skin complications
+   ☐ Medical records of recurrent infections/rashes
+   ☐ Documentation of functional limitations
+
+EXCLUSION CRITERIA (COSMETIC - NOT COVERED):
+- Desire for improved appearance WITHOUT functional impairment
+- No documented recurrent infections or medical complications
+- No interference with mobility or hygiene
+- Stretch marks alone (striae distensae) without pannus
+- Post-pregnancy skin laxity without functional impairment
+
+APPROVAL CRITERIA:
+✗ Purely cosmetic (no functional impairment, no medical complications) → DENIED (NOT MEDICALLY NECESSARY)
+⚠ Borderline functional impairment, limited documentation → MANUAL REVIEW
+✓ Clear functional impairment + recurrent infections + documentation → APPROVED
+""",
+        "questionnaire": json.dumps([
+            {"question": "Does pannus cause functional impairment (mobility, hygiene, chronic pain)?", "required": True},
+            {"question": "Are recurrent skin infections documented (3+ episodes in 12 months)?", "required": True},
+            {"question": "Is weight stable for 12+ months with BMI < 35?", "required": True},
+            {"question": "Is this request purely for cosmetic reasons without functional impairment?", "required": True, "deny_if": "yes"}
+        ])
     }
 ]
 

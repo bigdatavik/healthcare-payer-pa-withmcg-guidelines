@@ -136,7 +136,32 @@ print(f"✅ Table 'authorization_requests' created")
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ### Table 2: patient_clinical_records (Vector Store 1)
+# MAGIC ### Table 1b: pa_audit_trail (Audit Trail for Q&A)
+
+# COMMAND ----------
+
+spark.sql(f"""
+CREATE TABLE IF NOT EXISTS {catalog_name}.{schema_name}.pa_audit_trail (
+  audit_id STRING NOT NULL COMMENT 'Unique identifier: request_id_Q1, request_id_Q2, etc',
+  request_id STRING NOT NULL COMMENT 'Links to authorization_requests.request_id',
+  question_number INT NOT NULL COMMENT 'Sequential number: 1, 2, 3, 4...',
+  question_text STRING NOT NULL COMMENT 'MCG/InterQual question text',
+  answer STRING NOT NULL COMMENT 'YES or NO',
+  evidence STRING COMMENT 'Clinical evidence used to answer',
+  evidence_source STRING COMMENT 'CLINICAL_NOTE, LAB_RESULT, XRAY, PT_NOTE, etc',
+  confidence DOUBLE COMMENT 'AI confidence for this answer (0.0-1.0)',
+  created_at TIMESTAMP COMMENT 'When this Q&A was recorded'
+)
+USING DELTA
+COMMENT 'Detailed audit trail showing MCG Q&A breakdown with evidence for each PA request'
+""")
+
+print(f"✅ Table 'pa_audit_trail' created")
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ### Table 2: patient_clinical_records (Full Records - Operational)
 
 # COMMAND ----------
 
@@ -146,7 +171,7 @@ CREATE TABLE IF NOT EXISTS {catalog_name}.{schema_name}.patient_clinical_records
   patient_id STRING NOT NULL,
   record_date TIMESTAMP NOT NULL,
   record_type STRING NOT NULL COMMENT 'CLINICAL_NOTE, LAB_RESULT, IMAGING_REPORT, PT_NOTE, MEDICATION',
-  content STRING NOT NULL COMMENT 'Full text content for vector embedding',
+  content STRING NOT NULL COMMENT 'FULL TEXT - complete clinical note (no chunking)',
   source_system STRING COMMENT 'Epic, Cerner, etc',
   provider_id STRING,
   metadata STRING COMMENT 'JSON metadata',
@@ -154,15 +179,41 @@ CREATE TABLE IF NOT EXISTS {catalog_name}.{schema_name}.patient_clinical_records
 )
 USING DELTA
 TBLPROPERTIES ('delta.enableChangeDataFeed' = 'true')
-COMMENT 'Patient clinical documents for Vector Store 1 (semantic search)'
+COMMENT 'Full patient clinical records - used by PA review for complete context'
 """)
 
-print(f"✅ Table 'patient_clinical_records' created")
+print(f"✅ Table 'patient_clinical_records' created (full records)")
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ### Table 3: clinical_guidelines (Vector Store 2)
+# MAGIC ### Table 2b: patient_clinical_records_chunks (For Vector Search)
+
+# COMMAND ----------
+
+spark.sql(f"""
+CREATE TABLE IF NOT EXISTS {catalog_name}.{schema_name}.patient_clinical_records_chunks (
+  chunk_id STRING NOT NULL,
+  record_id STRING NOT NULL COMMENT 'Foreign key to patient_clinical_records.record_id',
+  patient_id STRING NOT NULL,
+  record_type STRING NOT NULL,
+  chunk_index INT NOT NULL COMMENT 'Position in original document (0-based)',
+  chunk_text STRING NOT NULL COMMENT 'Chunked text (500-1000 tokens)',
+  keywords ARRAY<STRING>,
+  char_count INT,
+  created_at TIMESTAMP
+)
+USING DELTA
+TBLPROPERTIES ('delta.enableChangeDataFeed' = 'true')
+COMMENT 'Chunked clinical records for vector search index'
+""")
+
+print(f"✅ Table 'patient_clinical_records_chunks' created (search chunks)")
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ### Table 3: clinical_guidelines (Full Guidelines - Operational)
 
 # COMMAND ----------
 
@@ -174,7 +225,7 @@ CREATE TABLE IF NOT EXISTS {catalog_name}.{schema_name}.clinical_guidelines (
   procedure_code STRING COMMENT 'CPT code if applicable',
   diagnosis_code STRING COMMENT 'ICD-10 code if applicable',
   title STRING NOT NULL,
-  content STRING NOT NULL COMMENT 'Full guideline text including questionnaire',
+  content STRING NOT NULL COMMENT 'FULL GUIDELINE TEXT (no chunking)',
   questionnaire STRING COMMENT 'JSON array of MCG/InterQual questions',
   decision_criteria STRING COMMENT 'Approval/denial logic',
   effective_date DATE,
@@ -183,10 +234,36 @@ CREATE TABLE IF NOT EXISTS {catalog_name}.{schema_name}.clinical_guidelines (
 )
 USING DELTA
 TBLPROPERTIES ('delta.enableChangeDataFeed' = 'true')
-COMMENT 'MCG, InterQual, and Medicare guidelines for Vector Store 2'
+COMMENT 'Full MCG, InterQual, and Medicare guidelines - used by PA review for complete context'
 """)
 
-print(f"✅ Table 'clinical_guidelines' created")
+print(f"✅ Table 'clinical_guidelines' created (full guidelines)")
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ### Table 3b: clinical_guidelines_chunks (For Vector Search)
+
+# COMMAND ----------
+
+spark.sql(f"""
+CREATE TABLE IF NOT EXISTS {catalog_name}.{schema_name}.clinical_guidelines_chunks (
+  chunk_id STRING NOT NULL,
+  guideline_id STRING NOT NULL COMMENT 'Foreign key to clinical_guidelines.guideline_id',
+  procedure_code STRING,
+  diagnosis_code STRING,
+  chunk_index INT NOT NULL COMMENT 'Position in original guideline (0-based)',
+  chunk_text STRING NOT NULL COMMENT 'Chunked text (500-1000 tokens)',
+  tags ARRAY<STRING>,
+  char_count INT,
+  created_at TIMESTAMP
+)
+USING DELTA
+TBLPROPERTIES ('delta.enableChangeDataFeed' = 'true')
+COMMENT 'Chunked guidelines for vector search index'
+""")
+
+print(f"✅ Table 'clinical_guidelines_chunks' created (search chunks)")
 
 # COMMAND ----------
 
@@ -201,7 +278,32 @@ display(spark.sql(f"SHOW TABLES IN {catalog_name}.{schema_name}"))
 # COMMAND ----------
 
 # Show table details
-for table in ["authorization_requests", "patient_clinical_records", "clinical_guidelines"]:
+for table in ["authorization_requests", "pa_audit_trail", "patient_clinical_records", "patient_clinical_records_chunks", "clinical_guidelines", "clinical_guidelines_chunks"]:
+    print(f"\n{'='*60}")
+    print(f"Table: {catalog_name}.{schema_name}.{table}")
+    print(f"{'='*60}")
+    df = spark.sql(f"DESCRIBE TABLE {catalog_name}.{schema_name}.{table}")
+    df.show(50, truncate=False)
+
+# COMMAND ----------
+
+print("✅ Setup 01 Complete: Catalog and Schema created successfully!")
+
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## Verify Setup
+
+# COMMAND ----------
+
+# Show tables
+display(spark.sql(f"SHOW TABLES IN {catalog_name}.{schema_name}"))
+
+# COMMAND ----------
+
+# Show table details
+for table in ["authorization_requests", "pa_audit_trail", "patient_clinical_records", "patient_clinical_records_chunks", "clinical_guidelines", "clinical_guidelines_chunks"]:
     print(f"\n{'='*60}")
     print(f"Table: {catalog_name}.{schema_name}.{table}")
     print(f"{'='*60}")

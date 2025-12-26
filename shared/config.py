@@ -43,6 +43,8 @@ class PAAgentConfig:
         self.vector_endpoint = env_config['vector_endpoint']
         self.llm_endpoint = env_config['llm_endpoint']
         self.app_name = env_config['app_name']
+        self.volume_clinical = env_config['volume_clinical']
+        self.volume_guidelines = env_config['volume_guidelines']
         
         # Common settings
         self.spark_version = common_config['spark_version']
@@ -55,12 +57,23 @@ class PAAgentConfig:
         self.auto_approve_threshold = common_config['auto_approve_threshold']
         self.manual_review_threshold = common_config['manual_review_threshold']
         
+        # Genie AI settings
+        self.genie_display_name = common_config.get('genie_display_name', 'Prior Authorization Analytics')
+        self.genie_description = common_config.get('genie_description', 'Natural language queries for PA requests')
+        
+        # Chunking settings
+        self.min_chunk_size = common_config['min_chunk_size']
+        self.max_chunk_size = common_config['max_chunk_size']
+        
         # Computed values (automatically derived)
         self.auth_requests_table = f"{self.catalog}.{self.schema}.authorization_requests"
         self.clinical_records_table = f"{self.catalog}.{self.schema}.patient_clinical_records"
         self.guidelines_table = f"{self.catalog}.{self.schema}.clinical_guidelines"
         self.clinical_vector_index = f"{self.catalog}.{self.schema}.patient_clinical_records_index"
         self.guidelines_vector_index = f"{self.catalog}.{self.schema}.clinical_guidelines_index"
+        self.clinical_volume_path = f"/Volumes/{self.catalog}/{self.schema}/{self.volume_clinical}"
+        self.guidelines_volume_path = f"/Volumes/{self.catalog}/{self.schema}/{self.volume_guidelines}"
+        self.config_table = f"{self.catalog}.{self.schema}.pa_config"  # For storing Genie Space ID, etc.
     
     def __repr__(self):
         return f"PAAgentConfig(env={self.catalog}, warehouse={self.warehouse_id})"
@@ -158,5 +171,18 @@ def print_config(cfg: PAAgentConfig):
     print(f"Guidelines Table:        {cfg.guidelines_table}")
     print(f"Clinical Vector Index:   {cfg.clinical_vector_index}")
     print(f"Guidelines Vector Index: {cfg.guidelines_vector_index}")
+    print(f"Clinical Volume Path:    {cfg.clinical_volume_path}")
+    print(f"Guidelines Volume Path:  {cfg.guidelines_volume_path}")
+    print(f"Min Chunk Size:          {cfg.min_chunk_size}")
+    print(f"Max Chunk Size:          {cfg.max_chunk_size}")
+    print(f"Genie Display Name:      {cfg.genie_display_name}")
+    print(f"Genie Description:       {cfg.genie_description}")
+    print("=" * 80)
+
+
+    print(f"Min Chunk Size:          {cfg.min_chunk_size}")
+    print(f"Max Chunk Size:          {cfg.max_chunk_size}")
+    print(f"Genie Display Name:      {cfg.genie_display_name}")
+    print(f"Genie Description:       {cfg.genie_description}")
     print("=" * 80)
 

@@ -19,40 +19,58 @@ echo "Schema: $SCHEMA"
 echo "Warehouse: $WAREHOUSE_ID"
 echo ""
 
-# Get service principal ID
-echo "🔍 Getting service principal ID..."
-SP_ID=$(databricks apps get $APP_NAME --profile $PROFILE --output json | python -c "import sys, json; print(json.load(sys.stdin).get('service_principal_id', ''))")
+# Get service principal client ID (UUID)
+echo "🔍 Getting service principal client ID..."
+SP_CLIENT_ID=$(databricks apps get $APP_NAME --profile $PROFILE --output json | python -c "import sys, json; print(json.load(sys.stdin).get('service_principal_client_id', ''))")
 
-if [ -z "$SP_ID" ]; then
-    echo "❌ Error: Could not get service principal ID"
+if [ -z "$SP_CLIENT_ID" ]; then
+    echo "❌ Error: Could not get service principal client ID"
     echo "   Make sure the app is deployed first:"
-    echo "   ./deploy_app_source.sh dev"
+    echo "   databricks bundle deploy --target dev"
     exit 1
 fi
 
-echo "✅ Service Principal ID: $SP_ID"
+echo "✅ Service Principal Client ID: $SP_CLIENT_ID"
 echo ""
 
 # Grant catalog permissions
 echo "📋 1/3: Granting catalog permissions..."
 databricks grants update catalog $CATALOG --profile $PROFILE \
-  --json "{\"changes\": [{\"principal\": \"$SP_ID\", \"add\": [\"USE_CATALOG\"]}]}"
+  --json "{\"changes\": [{\"principal\": \"$SP_CLIENT_ID\", \"add\": [\"USE_CATALOG\"]}]}"
 echo "   ✅ USE_CATALOG granted on $CATALOG"
 
 # Grant schema permissions
 echo "📋 2/3: Granting schema permissions..."
 databricks grants update schema $CATALOG.$SCHEMA --profile $PROFILE \
-  --json "{\"changes\": [{\"principal\": \"$SP_ID\", \"add\": [\"USE_SCHEMA\", \"SELECT\"]}]}"
+  --json "{\"changes\": [{\"principal\": \"$SP_CLIENT_ID\", \"add\": [\"USE_SCHEMA\", \"SELECT\"]}]}"
 echo "   ✅ USE_SCHEMA, SELECT granted on $CATALOG.$SCHEMA"
 
 # Grant warehouse permissions
-echo "📋 3/3: Granting warehouse permissions..."
-databricks permissions update sql/warehouses/$WAREHOUSE_ID --profile $PROFILE \
-  --json "{\"access_control_list\": [{\"service_principal_name\": \"$SP_ID\", \"permission_level\": \"CAN_USE\"}]}"
+echo "📋 3/4: Granting warehouse permissions..."
+databricks permissions update sql/warehouses $WAREHOUSE_ID --profile $PROFILE \
+  --json "{\"access_control_list\": [{\"service_principal_name\": \"$SP_CLIENT_ID\", \"permission_level\": \"CAN_USE\"}]}"
 echo "   ✅ CAN_USE granted on warehouse $WAREHOUSE_ID"
+
+# Grant EXECUTE permissions on UC functions
+echo "📋 4/4: Granting EXECUTE permissions on UC functions..."
+FUNCTIONS=("check_mcg_guidelines" "answer_mcg_question" "explain_decision" "extract_clinical_criteria")
+for FUNCTION in "${FUNCTIONS[@]}"; do
+    databricks grants update function $CATALOG.$SCHEMA.$FUNCTION --profile $PROFILE \
+      --json "{\"changes\": [{\"principal\": \"$SP_CLIENT_ID\", \"add\": [\"EXECUTE\"]}]}" > /dev/null 2>&1 || true
+done
+echo "   ✅ EXECUTE granted on all UC functions"
 
 echo ""
 echo "========================================="
+echo "✅ All permissions granted successfully!"
+echo ""
+echo "📋 Next steps:"
+echo "   1. Get app URL: databricks apps get $APP_NAME --profile $PROFILE"
+echo "   2. Open app in browser"
+echo "   3. Test authorization workflow"
+
+
+
 echo "✅ All permissions granted successfully!"
 echo ""
 echo "📋 Next steps:"

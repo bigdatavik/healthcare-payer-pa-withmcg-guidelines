@@ -1,8 +1,10 @@
 # Databricks notebook source
 # MAGIC %md
-# MAGIC # Setup 03a: Chunk Guidelines for Vector Search
+# MAGIC # Setup 03a: Process Guidelines - Two-Table Architecture
 # MAGIC
-# MAGIC Reads guideline documents from volume, chunks them optimally, and creates table with Change Data Feed enabled.
+# MAGIC Reads guideline documents from volume and writes to TWO tables:
+# MAGIC 1. `clinical_guidelines` - FULL guidelines (for PA review)
+# MAGIC 2. `clinical_guidelines_chunks` - Chunked guidelines (for vector search)
 # MAGIC
 # MAGIC **Configuration:** Reads from config.yaml via shared.config module
 
@@ -24,29 +26,39 @@ print_config(cfg)
 # COMMAND ----------
 
 VOLUME_PATH = cfg.guidelines_volume_path
-FULL_TABLE_NAME = cfg.guidelines_table
+FULL_GUIDELINES_TABLE = f"{cfg.catalog}.{cfg.schema}.clinical_guidelines"
+CHUNKS_TABLE = f"{cfg.catalog}.{cfg.schema}.clinical_guidelines_chunks"
 
-print(f"Table: {FULL_TABLE_NAME}")
-print(f"Volume: {VOLUME_PATH}")
+print(f"Full Guidelines Table: {FULL_GUIDELINES_TABLE}")
+print(f"Chunks Table:          {CHUNKS_TABLE}")
+print(f"Volume:                {VOLUME_PATH}")
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Drop and Recreate Table with CDF
+# MAGIC ## Drop and Recreate Tables with CDF
 
 # COMMAND ----------
 
-# Drop and recreate for clean slate
-print(f"🔄 Dropping and recreating table for clean slate")
+print(f"🔄 Dropping and recreating tables for clean slate")
+
+# Drop full guidelines table
 try:
-    spark.sql(f"DROP TABLE IF EXISTS {FULL_TABLE_NAME}")
-    print(f"✅ Dropped existing table: {FULL_TABLE_NAME}")
+    spark.sql(f"DROP TABLE IF EXISTS {FULL_GUIDELINES_TABLE}")
+    print(f"✅ Dropped existing table: {FULL_GUIDELINES_TABLE}")
 except Exception as e:
     print(f"ℹ️  No existing table to drop: {e}")
 
-# Create table with CDF enabled
+# Drop chunks table
+try:
+    spark.sql(f"DROP TABLE IF EXISTS {CHUNKS_TABLE}")
+    print(f"✅ Dropped existing table: {CHUNKS_TABLE}")
+except Exception as e:
+    print(f"ℹ️  No existing table to drop: {e}")
+
+# Create FULL GUIDELINES table
 spark.sql(f"""
-    CREATE TABLE {FULL_TABLE_NAME} (
+    CREATE TABLE {FULL_GUIDELINES_TABLE} (
         guideline_id STRING,
         platform STRING,
         category STRING,
@@ -57,21 +69,36 @@ spark.sql(f"""
         questionnaire STRING,
         decision_criteria STRING,
         effective_date DATE,
-        tags ARRAY<STRING>,
+        tags STRING,
+        created_at TIMESTAMP
+    )
+    USING DELTA
+    TBLPROPERTIES ('delta.enableChangeDataFeed' = 'true')
+""")
+print(f"✅ Full guidelines table created with CDF: {FULL_GUIDELINES_TABLE}")
+
+# Create CHUNKS table
+spark.sql(f"""
+    CREATE TABLE {CHUNKS_TABLE} (
+        chunk_id STRING,
+        guideline_id STRING,
+        procedure_code STRING,
+        diagnosis_code STRING,
         chunk_index INT,
-        total_chunks INT,
+        chunk_text STRING,
+        tags ARRAY<STRING>,
         char_count INT,
         created_at TIMESTAMP
     )
     USING DELTA
     TBLPROPERTIES ('delta.enableChangeDataFeed' = 'true')
 """)
-print(f"✅ Table created with Change Data Feed enabled: {FULL_TABLE_NAME}")
+print(f"✅ Chunks table created with CDF: {CHUNKS_TABLE}")
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Chunking Logic
+# MAGIC ## Processing Logic
 
 # COMMAND ----------
 
@@ -81,7 +108,6 @@ import json
 
 def extract_decision_criteria(content):
     """Extract decision/approval criteria from guideline content"""
-    # Look for approval criteria section
     patterns = [
         r'APPROVAL CRITERIA:(.*?)(?=\n\n|\Z)',
         r'DECISION CRITERIA:(.*?)(?=\n\n|\Z)',
@@ -92,12 +118,10 @@ def extract_decision_criteria(content):
         match = re.search(pattern, content, re.DOTALL | re.MULTILINE)
         if match:
             criteria = match.group(1).strip()
-            # Clean up checkboxes and extra whitespace
             criteria = re.sub(r'☐\s*', '', criteria)
             criteria = re.sub(r'\n\s*\n', '\n', criteria)
             return criteria
     
-    # If no specific section, try to extract lines with approval keywords
     lines = content.split('\n')
     criteria_lines = []
     for line in lines:
@@ -112,8 +136,6 @@ def extract_decision_criteria(content):
 def extract_tags(text):
     """Extract tags from guideline content"""
     tags = []
-    
-    # Common medical/procedure terms
     terms = [
         'surgery', 'imaging', 'therapy', 'medication', 'diagnosis',
         'knee', 'cardiac', 'orthopedic', 'radiology', 'cardiology',
@@ -125,54 +147,33 @@ def extract_tags(text):
         if term in text_lower:
             tags.append(term)
     
-    return list(set(tags))  # Remove duplicates
+    return list(set(tags))
 
-def split_guideline_sections(content):
-    """Split guideline into logical sections"""
-    sections = []
+def chunk_text(text, min_size, max_size):
+    """Chunk text into optimal sizes"""
+    if len(text) <= max_size:
+        return [text]
     
-    # Common section headers in medical guidelines
-    section_patterns = [
-        r'^INDICATION:',
-        r'^CLINICAL CRITERIA',
-        r'^EXCLUSION CRITERIA',
-        r'^APPROVAL CRITERIA',
-        r'^COVERAGE INDICATIONS',
-        r'^SEVERITY OF ILLNESS',
-        r'^INTENSITY OF SERVICE',
-        r'^MEDICAL NECESSITY',
-        r'^DOCUMENTATION REQUIREMENTS',
-        r'^\d+\.\s+[A-Z]'  # Numbered sections
-    ]
+    # Split by sections or paragraphs
+    paragraphs = text.split('\n\n')
+    chunks = []
+    current_chunk = ""
     
-    lines = content.split('\n')
-    current_section = ""
-    
-    for line in lines:
-        is_header = any(re.match(pattern, line.strip()) for pattern in section_patterns)
-        
-        if is_header and current_section and len(current_section) > 100:
-            sections.append(current_section.strip())
-            current_section = line + '\n'
+    for para in paragraphs:
+        if len(current_chunk) + len(para) <= max_size:
+            current_chunk += para + '\n\n'
         else:
-            current_section += line + '\n'
+            if current_chunk:
+                chunks.append(current_chunk.strip())
+            current_chunk = para + '\n\n'
     
-    if current_section:
-        sections.append(current_section.strip())
+    if current_chunk:
+        chunks.append(current_chunk.strip())
     
-    # If no sections found, treat whole content as one section
-    if not sections:
-        sections = [content]
-    
-    return sections
+    return chunks
 
-def chunk_guideline(file_path, min_chunk_size=None, max_chunk_size=None):
-    """Read and chunk a guideline document from volume"""
-    if min_chunk_size is None:
-        min_chunk_size = cfg.min_chunk_size
-    if max_chunk_size is None:
-        max_chunk_size = cfg.max_chunk_size
-    
+def process_guideline(file_path):
+    """Process a guideline document and return both full guideline and chunks"""
     try:
         content = dbutils.fs.head(file_path, 1000000)
         
@@ -208,7 +209,6 @@ def chunk_guideline(file_path, min_chunk_size=None, max_chunk_size=None):
                 except:
                     effective_date = date.today()
             elif line.startswith("QUESTIONNAIRE:"):
-                # Capture questionnaire JSON (next line)
                 if i + 1 < len(lines):
                     questionnaire = lines[i + 1].strip()
             elif i > 8 and not line.startswith("QUESTIONNAIRE"):
@@ -216,66 +216,51 @@ def chunk_guideline(file_path, min_chunk_size=None, max_chunk_size=None):
         
         content_text = '\n'.join(main_content).strip()
         
-        # Split into sections
-        sections = split_guideline_sections(content_text)
-        
-        # Chunk sections if needed
-        chunks = []
-        for section in sections:
-            if len(section) <= max_chunk_size:
-                chunks.append(section)
-            else:
-                # Split large sections by paragraphs
-                paragraphs = section.split('\n\n')
-                current_chunk = ""
-                
-                for para in paragraphs:
-                    if len(current_chunk) + len(para) <= max_chunk_size:
-                        current_chunk += para + '\n\n'
-                    else:
-                        if current_chunk:
-                            chunks.append(current_chunk.strip())
-                        current_chunk = para + '\n\n'
-                
-                if current_chunk:
-                    chunks.append(current_chunk.strip())
-        
-        # Extract tags
+        # Extract metadata from content
         tags = extract_tags(content_text)
-        
-        # Extract decision criteria from content
+        tags_str = ','.join(tags)
         decision_criteria = extract_decision_criteria(content_text)
         
-        # Create chunk records
-        total_chunks = len(chunks)
+        # 1. FULL GUIDELINE (for PA review)
+        full_guideline = {
+            'guideline_id': guideline_id,
+            'platform': platform,
+            'category': category,
+            'procedure_code': procedure_code,
+            'diagnosis_code': diagnosis_code,
+            'title': title,
+            'content': content_text,  # FULL TEXT (no chunking)
+            'questionnaire': questionnaire,
+            'decision_criteria': decision_criteria,
+            'effective_date': effective_date,
+            'tags': tags_str,
+            'created_at': datetime.now()
+        }
+        
+        # 2. CHUNKS (for vector search)
+        text_chunks = chunk_text(content_text, cfg.min_chunk_size, cfg.max_chunk_size)
         chunk_records = []
         
-        for idx, chunk_content in enumerate(chunks):
+        for idx, chunk_content in enumerate(text_chunks):
             chunk_records.append({
-                'guideline_id': f"{guideline_id}_chunk_{idx}",
-                'platform': platform,
-                'category': category,
+                'chunk_id': f"{guideline_id}_chunk_{idx}",
+                'guideline_id': guideline_id,
                 'procedure_code': procedure_code,
                 'diagnosis_code': diagnosis_code,
-                'title': title,
-                'content': chunk_content,
-                'questionnaire': questionnaire,
-                'decision_criteria': decision_criteria,  # Now extracted from content
-                'effective_date': effective_date,
-                'tags': tags,
                 'chunk_index': idx,
-                'total_chunks': total_chunks,
+                'chunk_text': chunk_content,
+                'tags': tags,
                 'char_count': len(chunk_content),
                 'created_at': datetime.now()
             })
         
-        return chunk_records
+        return full_guideline, chunk_records
     
     except Exception as e:
         print(f"Error processing {file_path}: {e}")
-        return []
+        return None, []
 
-print("✅ Chunking functions loaded")
+print("✅ Processing functions loaded")
 
 # COMMAND ----------
 
@@ -288,27 +273,32 @@ print("✅ Chunking functions loaded")
 files = dbutils.fs.ls(VOLUME_PATH)
 print(f"Found {len(files)} files in volume")
 
+full_guidelines = []
 all_chunks = []
+
 for file_info in files:
     if file_info.path.endswith('.txt'):
         print(f"Processing: {file_info.name}")
-        chunks = chunk_guideline(file_info.path)
-        all_chunks.extend(chunks)
-        print(f"  → Created {len(chunks)} chunks")
+        full_guide, chunks = process_guideline(file_info.path)
+        if full_guide:
+            full_guidelines.append(full_guide)
+            all_chunks.extend(chunks)
+            print(f"  → 1 full guideline, {len(chunks)} chunks")
 
-print(f"\n✅ Total chunks created: {len(all_chunks)}")
+print(f"\n✅ Total full guidelines: {len(full_guidelines)}")
+print(f"✅ Total chunks:          {len(all_chunks)}")
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Insert Chunks into Table
+# MAGIC ## Insert FULL GUIDELINES into Table
 
 # COMMAND ----------
 
 from pyspark.sql.types import *
 
-# Define schema
-chunk_schema = StructType([
+# Define schema for FULL guidelines
+full_guideline_schema = StructType([
     StructField("guideline_id", StringType(), False),
     StructField("platform", StringType(), False),
     StructField("category", StringType(), False),
@@ -319,63 +309,102 @@ chunk_schema = StructType([
     StructField("questionnaire", StringType(), True),
     StructField("decision_criteria", StringType(), True),
     StructField("effective_date", DateType(), True),
-    StructField("tags", ArrayType(StringType()), False),
+    StructField("tags", StringType(), True),
+    StructField("created_at", TimestampType(), False)
+])
+
+# Write full guidelines
+if full_guidelines:
+    full_guidelines_df = spark.createDataFrame(full_guidelines, schema=full_guideline_schema)
+    full_guidelines_df.write.mode("append").saveAsTable(FULL_GUIDELINES_TABLE)
+    print(f"✅ Inserted {len(full_guidelines)} FULL guidelines into {FULL_GUIDELINES_TABLE}")
+else:
+    print("⚠️  No full guidelines to insert")
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## Insert CHUNKS into Table
+
+# COMMAND ----------
+
+# Define schema for CHUNKS
+chunk_schema = StructType([
+    StructField("chunk_id", StringType(), False),
+    StructField("guideline_id", StringType(), False),
+    StructField("procedure_code", StringType(), True),
+    StructField("diagnosis_code", StringType(), True),
     StructField("chunk_index", IntegerType(), False),
-    StructField("total_chunks", IntegerType(), False),
+    StructField("chunk_text", StringType(), False),
+    StructField("tags", ArrayType(StringType()), False),
     StructField("char_count", IntegerType(), False),
     StructField("created_at", TimestampType(), False)
 ])
 
-# Create DataFrame and write to table
+# Write chunks
 if all_chunks:
     chunks_df = spark.createDataFrame(all_chunks, schema=chunk_schema)
-    chunks_df.write.mode("append").saveAsTable(FULL_TABLE_NAME)
-    print(f"✅ Inserted {len(all_chunks)} chunks into {FULL_TABLE_NAME}")
+    chunks_df.write.mode("append").saveAsTable(CHUNKS_TABLE)
+    print(f"✅ Inserted {len(all_chunks)} CHUNKS into {CHUNKS_TABLE}")
 else:
     print("⚠️  No chunks to insert")
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Verify Table
+# MAGIC ## Verify Tables
 
 # COMMAND ----------
 
 print("=" * 80)
-print("GUIDELINES TABLE STATISTICS")
+print("FULL GUIDELINES TABLE (For PA Review)")
 print("=" * 80)
 
-stats = spark.sql(f"""
+stats1 = spark.sql(f"""
+SELECT 
+    COUNT(*) as total_guidelines,
+    COUNT(DISTINCT platform) as platforms,
+    AVG(LENGTH(content)) as avg_content_length
+FROM {FULL_GUIDELINES_TABLE}
+""").collect()[0]
+
+print(f"Total Guidelines:   {stats1['total_guidelines']}")
+print(f"Platforms:          {stats1['platforms']}")
+print(f"Avg Content Length: {stats1['avg_content_length']:.0f} chars")
+print("=" * 80)
+
+print("\n" + "=" * 80)
+print("CHUNKS TABLE (For Vector Search)")
+print("=" * 80)
+
+stats2 = spark.sql(f"""
 SELECT 
     COUNT(*) as total_chunks,
-    COUNT(DISTINCT platform) as platforms,
     AVG(char_count) as avg_chunk_size,
     MIN(char_count) as min_chunk_size,
     MAX(char_count) as max_chunk_size
-FROM {FULL_TABLE_NAME}
+FROM {CHUNKS_TABLE}
 """).collect()[0]
 
-print(f"Total Chunks:      {stats['total_chunks']}")
-print(f"Platforms:         {stats['platforms']}")
-print(f"Avg Chunk Size:    {stats['avg_chunk_size']:.0f} chars")
-print(f"Min Chunk Size:    {stats['min_chunk_size']} chars")
-print(f"Max Chunk Size:    {stats['max_chunk_size']} chars")
+print(f"Total Chunks:       {stats2['total_chunks']}")
+print(f"Avg Chunk Size:     {stats2['avg_chunk_size']:.0f} chars")
+print(f"Min Chunk Size:     {stats2['min_chunk_size']} chars")
+print(f"Max Chunk Size:     {stats2['max_chunk_size']} chars")
 print("=" * 80)
 
-# Show platform breakdown
-print("\nPlatform breakdown:")
+# Show sample full guidelines
+print("\nSample FULL guidelines:")
 display(spark.sql(f"""
-SELECT platform, COUNT(*) as chunks
-FROM {FULL_TABLE_NAME}
-GROUP BY platform
-ORDER BY chunks DESC
+SELECT guideline_id, platform, procedure_code, diagnosis_code, LENGTH(content) as content_length, LEFT(content, 100) as content_preview
+FROM {FULL_GUIDELINES_TABLE}
+LIMIT 5
 """))
 
 # Show sample chunks
-print("\nSample chunks:")
+print("\nSample CHUNKS:")
 display(spark.sql(f"""
-SELECT guideline_id, platform, procedure_code, chunk_index, total_chunks, char_count, LEFT(content, 100) as content_preview
-FROM {FULL_TABLE_NAME}
+SELECT chunk_id, guideline_id, procedure_code, chunk_index, char_count, LEFT(chunk_text, 100) as chunk_preview
+FROM {CHUNKS_TABLE}
 LIMIT 5
 """))
 
@@ -387,12 +416,18 @@ LIMIT 5
 # COMMAND ----------
 
 print("=" * 80)
-print("GUIDELINES TABLE CREATED WITH CDF!")
+print("TWO-TABLE ARCHITECTURE COMPLETE!")
 print("=" * 80)
-print(f"✅ Table: {FULL_TABLE_NAME}")
-print(f"✅ Change Data Feed: ENABLED")
-print(f"✅ Total Chunks: {len(all_chunks)}")
+print(f"✅ Full Guidelines Table: {FULL_GUIDELINES_TABLE}")
+print(f"   - {len(full_guidelines)} complete guidelines")
+print(f"   - Used by: PA agent for complete context")
+print(f"   - Change Data Feed: ENABLED")
+print()
+print(f"✅ Chunks Table:          {CHUNKS_TABLE}")
+print(f"   - {len(all_chunks)} chunks for semantic search")
+print(f"   - Used by: Vector search index")
+print(f"   - Change Data Feed: ENABLED")
 print("=" * 80)
-print("\n📝 Next step: Run 06_create_vector_index_guidelines.py to create vector search index")
+print("\n📝 Next step: Run 06_create_vector_index_guidelines.py")
+print("   (Vector index will point to CHUNKS table)")
 print("=" * 80)
-

@@ -52,16 +52,25 @@ resources:
             spark_version: "16.4.x-scala2.12"
             node_type_id: "Standard_DS3_v2"
             num_workers: 2
-            spark_conf:
-              "spark.databricks.cluster.profile": "singleNode"
-              "spark.master": "local[*]"
+            data_security_mode: "USER_ISOLATION" # Enable Unity Catalog
             custom_tags:
               project: "prior-authorization"
               environment: "${bundle.target}"
 
       tasks:
+        - task_key: cleanup
+          job_cluster_key: main_cluster
+          notebook_task:
+            notebook_path: ./setup/00_CLEANUP.py
+            base_parameters:
+              catalog_name: ${var.catalog_name}
+              schema_name: ${var.schema_name}
+          timeout_seconds: 600
+
         - task_key: create_catalog_schema
           job_cluster_key: main_cluster
+          depends_on:
+            - task_key: cleanup
           notebook_task:
             notebook_path: ./setup/01_create_catalog_schema.py
             base_parameters:

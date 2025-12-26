@@ -71,9 +71,9 @@ common:
   max_chunk_size: 1500 # Maximum characters per chunk
 
   # Decision thresholds
-  auto_approve_threshold: 0.80 # 80%+ criteria met → APPROVED
-  manual_review_threshold: 0.60 # 60-80% → MANUAL_REVIEW
-  # Below 60% → DENIED
+  auto_approve_threshold: 0.75 # 75%+ criteria met → APPROVED
+  manual_review_threshold: 0.50 # 50-75% → MANUAL_REVIEW
+  # Below 50% → DENIED
 
   # Genie Space settings (for natural language queries)
   genie_display_name: "Prior Authorization Analytics"

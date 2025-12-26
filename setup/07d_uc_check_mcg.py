@@ -63,7 +63,6 @@ RETURN SELECT
 FROM {cfg.catalog}.{cfg.schema}.clinical_guidelines
 WHERE procedure_code = proc_code
   AND diagnosis_code = diag_code
-  AND chunk_index = 0  -- Get first chunk which has complete metadata
 LIMIT 1
 """)
 

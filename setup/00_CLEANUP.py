@@ -99,8 +99,11 @@ print("\n📊 Dropping tables...")
 
 tables = [
     "authorization_requests",
+    "pa_audit_trail",
     "patient_clinical_records",
-    "clinical_guidelines"
+    "patient_clinical_records_chunks",  # NEW: Chunks table
+    "clinical_guidelines",
+    "clinical_guidelines_chunks"  # NEW: Chunks table
 ]
 
 for table in tables:
@@ -143,20 +146,16 @@ except Exception as e:
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC ## Step 6: Delete Vector Search Endpoint (Optional)
+# MAGIC ## Step 6: Skip Vector Search Endpoint Deletion (Shared Resource)
 
 # COMMAND ----------
 
-print("\n🔌 Deleting vector search endpoint (optional)...")
+print("\n🔌 Vector search endpoint...")
 
-try:
-    endpoint_name = cfg.vector_endpoint
-    print(f"   Deleting endpoint: {endpoint_name}")
-    w.vector_search_endpoints.delete_endpoint(endpoint_name=endpoint_name)
-    print(f"   ✅ Deleted vector search endpoint: {endpoint_name}")
-except Exception as e:
-    print(f"   ⚠️  Endpoint deletion: {e}")
-    print(f"   Note: Endpoint may be shared, skipping is OK")
+endpoint_name = cfg.vector_endpoint
+print(f"   Endpoint: {endpoint_name}")
+print(f"   ⚠️  SKIPPING deletion: This is a SHARED endpoint used by multiple projects")
+print(f"   Note: Indexes were already deleted in Step 1")
 
 # COMMAND ----------
 

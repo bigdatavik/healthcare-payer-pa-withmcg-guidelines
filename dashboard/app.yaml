@@ -40,6 +40,6 @@ env:
   
   # Decision thresholds
   - name: 'AUTO_APPROVE_THRESHOLD'
-    value: '0.8'
+    value: '0.75'
   - name: 'MANUAL_REVIEW_THRESHOLD'
-    value: '0.6'
+    value: '0.5'

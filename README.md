@@ -19,6 +19,19 @@ An intelligent prior authorization system using LangGraph agents, Unity Catalog 
 
 ---
 
+## 📖 Architecture Documentation
+
+**NEW!** Comprehensive documentation on real-world data flows and system architecture:
+
+📁 **[docs/architecture/](docs/architecture/)** - Complete architecture documentation
+- 🌐 **[REAL_WORLD_DATA_FLOWS.md](docs/architecture/REAL_WORLD_DATA_FLOWS.md)** - How data enters the PA system
+  - Clinical Records (FHIR, HL7, Claims Attachments, C-CDA)
+  - PA Requests (Provider Portals, EMR Integration, EDI 278)
+  - Guidelines (MCG, InterQual, Medicare APIs)
+  - Complete end-to-end flow with diagrams
+
+---
+
 ## 🚀 Quick Start (2 Steps)
 
 ### **Step 1: Configure** (2 minutes)
@@ -81,7 +94,7 @@ python generate_app_yaml.py dev
 databricks bundle deploy --target dev --profile DEFAULT_azure
 
 # 3. Create data and resources
-databricks bundle run setup_pa_agent --target dev --profile DEFAULT_azure
+databricks bundle run pa_setup_job --target dev --profile DEFAULT_azure
 
 # 4. Grant permissions
 ./grant_permissions.sh dev
@@ -104,19 +117,24 @@ Your app will be available at: `https://your-workspace.azuredatabricks.net/apps/
 
 When you run the commands above, the system automatically:
 
-1. ✅ Creates Unity Catalog `healthcare_payer_pa_withmcg_guidelines_dev`
-2. ✅ Creates schema `main`
-3. ✅ Generates synthetic patient clinical records (notes, labs, imaging, PT, medications)
-4. ✅ Generates synthetic MCG and InterQual guidelines
-5. ✅ Generates synthetic PA requests
-6. ✅ Creates **7 AI functions** (authorize, extract, check MCG, answer question, explain, search clinical, search guidelines)
-7. ✅ Creates **TWO vector search indexes**:
+1. ✅ **Cleanup** - Removes all existing resources (catalog, tables, indexes, functions) for clean run
+2. ✅ Creates Unity Catalog `healthcare_payer_pa_withmcg_guidelines_dev`
+3. ✅ Creates schema `main`
+4. ✅ Generates synthetic patient clinical records (notes, labs, imaging, PT, medications)
+   - **Demo patients:** PT00001, PT00016, PT00025 with MCG-relevant detailed clinical data
+5. ✅ Generates synthetic MCG and InterQual guidelines
+6. ✅ Generates synthetic PA requests
+   - **5 demo requests:** PA000001-PA000005 ready for queue workflow
+7. ✅ Creates **4 UC AI functions** (check MCG, answer question, explain decision, extract criteria)
+8. ✅ Creates **TWO vector search indexes**:
    - **Vector Store 1**: Clinical Documents (patient records)
    - **Vector Store 2**: Guidelines (MCG, InterQual, Medicare)
-8. ✅ Deploys Streamlit app with 3 pages
-9. ✅ Grants all necessary permissions
+9. ✅ Deploys Streamlit app with 3 pages
+10. ✅ Grants all necessary permissions
 
-**Total time**: ~15-20 minutes (vector indexes need 15-30 minutes to sync)
+**Total time**: ~25-30 minutes (includes cleanup + setup + vector index sync)
+
+**Note:** The setup job starts with a cleanup task to ensure a completely fresh environment every time!
 
 ---
 
@@ -262,8 +280,9 @@ databricks bundle deploy --target prod
    # Step 2: Deploy infrastructure (creates app and job definitions)
    databricks bundle deploy --target dev --profile DEFAULT_azure
    
-   # Step 3: Run setup job (creates catalog, tables, functions, data, vector indexes)
-   databricks bundle run setup_pa_agent --target dev --profile DEFAULT_azure
+  # Step 3: Run setup job (creates catalog, tables, functions, data, vector indexes)
+  # This includes automatic cleanup first!
+  databricks bundle run pa_setup_job --target dev --profile DEFAULT_azure
    
    # Step 4: Grant service principal permissions
    ./grant_permissions.sh dev
@@ -388,7 +407,7 @@ databricks jobs list-runs --job-id <job-id> --limit 1 --profile DEFAULT_azure
 
 Rerun failed job:
 ```bash
-databricks bundle run setup_pa_agent --target dev --profile DEFAULT_azure
+databricks bundle run pa_setup_job --target dev --profile DEFAULT_azure
 ```
 
 ### **Problem: Vector indexes not syncing**
@@ -618,6 +637,25 @@ Step 5: Agent validates against Vector Store 2 → Decision
 **✅ Project Complete - December 2024**
 
 This is a production-ready prior authorization system demonstrating:
+- **Modern AI Architecture**: LangGraph agents + UC Functions + Vector Search
+- **Real Business Impact**: 95% faster, 96% cheaper, 60-70% auto-approval
+- **Healthcare Compliance**: MCG/InterQual integration, audit trails, explainable AI
+- **Fully Automated**: One-command deployment, complete documentation
+
+**Built with:**
+- Databricks Lakehouse Platform
+- Unity Catalog & AI Functions
+- LangGraph (LangChain)
+- Vector Search (TWO indexes)
+- Claude Sonnet 4.5
+- Streamlit
+
+**Template:** Built using fraudtemplate pattern
+
+---
+
+**Built with ❤️ for healthcare innovation | December 2024**
+
 - **Modern AI Architecture**: LangGraph agents + UC Functions + Vector Search
 - **Real Business Impact**: 95% faster, 96% cheaper, 60-70% auto-approval
 - **Healthcare Compliance**: MCG/InterQual integration, audit trails, explainable AI
