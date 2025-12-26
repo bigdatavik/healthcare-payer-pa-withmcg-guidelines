@@ -720,8 +720,14 @@ if 'selected_request' not in st.session_state:
 with tab1:
     st.markdown("**Load pending PA requests from database**")
     
-    if st.button("🔄 Refresh Queue", key="refresh_queue"):
-        st.session_state.pending_requests = load_pending_requests()
+    # Top action bar
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        if st.button("🔄 Refresh Queue", key="refresh_queue"):
+            st.session_state.pending_requests = load_pending_requests()
+            st.rerun()
+    with col2:
+        st.markdown("") # Spacer
     
     # Load on first view
     if 'pending_requests' not in st.session_state:
@@ -730,26 +736,175 @@ with tab1:
     if st.session_state.pending_requests:
         st.success(f"✅ {len(st.session_state.pending_requests)} pending requests found")
         
-        # Display with urgency indicators
-        for req in st.session_state.pending_requests:
+        # Create a DataFrame for display
+        import pandas as pd
+        df_display = pd.DataFrame([{
+            "Select": False,
+            "Request ID": req['request_id'],
+            "Patient ID": req['patient_id'],
+            "Procedure": req['procedure_code'],
+            "Diagnosis": req['diagnosis_code'],
+            "Urgency": req['urgency'],
+            "Date": req.get('created_at', 'N/A')
+        } for req in st.session_state.pending_requests])
+        
+        # Display table with selection
+        st.markdown("#### 📋 Pending PA Requests Queue")
+        
+        # Add select all checkbox
+        select_all = st.checkbox("Select All", key="select_all_queue")
+        if select_all:
+            selected_requests = [req['request_id'] for req in st.session_state.pending_requests]
+        else:
+            selected_requests = []
+        
+        # Display each request as a selectable row
+        for idx, req in enumerate(st.session_state.pending_requests):
             urgency_icon = "🔴" if req['urgency'] == "STAT" else "🟡" if req['urgency'] == "URGENT" else "🟢"
-            label = f"{urgency_icon} {req['request_id']} - {req['patient_id']} - CPT {req['procedure_code']}"
             
-            if st.button(label, key=f"queue_{req['request_id']}"):
-                # Load full request data
-                st.session_state.selected_request = {
-                    'source': 'queue',
-                    'request_id': req['request_id'],
-                    'patient_id': req['patient_id'],
-                    'procedure_code': req['procedure_code'],
-                    'diagnosis_code': req['diagnosis_code'],
-                    'urgency': req['urgency'],
-                    'notes': load_patient_clinical_notes(req['patient_id'])
-                }
-                st.success(f"✅ Loaded {req['request_id']}")
-                st.rerun()
+            col1, col2 = st.columns([1, 10])
+            with col1:
+                is_selected = st.checkbox(
+                    "Select", 
+                    key=f"select_{req['request_id']}", 
+                    value=(req['request_id'] in selected_requests),
+                    label_visibility="collapsed"
+                )
+                if is_selected and req['request_id'] not in selected_requests:
+                    selected_requests.append(req['request_id'])
+            with col2:
+                if st.button(
+                    f"{urgency_icon} **{req['request_id']}** | Patient: {req['patient_id']} | CPT: {req['procedure_code']} | ICD: {req['diagnosis_code']}", 
+                    key=f"queue_{req['request_id']}"
+                ):
+                    # Load full request data
+                    st.session_state.selected_request = {
+                        'source': 'queue',
+                        'request_id': req['request_id'],
+                        'patient_id': req['patient_id'],
+                        'procedure_code': req['procedure_code'],
+                        'diagnosis_code': req['diagnosis_code'],
+                        'urgency': req['urgency'],
+                        'notes': load_patient_clinical_notes(req['patient_id'])
+                    }
+                    st.success(f"✅ Loaded {req['request_id']}")
+                    st.rerun()
+        
+        # Batch processing section
+        if len(selected_requests) > 0:
+            st.markdown(f"---")
+            st.markdown(f"#### 🎯 Batch Actions ({len(selected_requests)} selected)")
+            
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                if st.button("🚀 Process Selected Batch", key="process_batch", type="primary"):
+                    st.info("⏳ Batch processing will be implemented in Phase 2")
+                    st.markdown("**Planned Features:**")
+                    st.markdown("- Process multiple requests in parallel")
+                    st.markdown("- Progress bar for batch processing")
+                    st.markdown("- Summary report of batch results")
+            with col2:
+                if st.button("📊 View Selected Details", key="view_batch_details"):
+                    st.write("Selected Request IDs:")
+                    for req_id in selected_requests:
+                        st.write(f"- {req_id}")
     else:
         st.info("ℹ️ No pending PA requests in queue. Try Sample Cases tab to test the system.")
+    
+    # Demo Reset Section
+    st.markdown("---")
+    st.markdown("### 🔄 Demo Reset (For Testing)")
+    st.info("💡 **Tip:** Use these tools to reset PA requests back to 'pending' for demo purposes.")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("🔄 Reset All 10 Demo Requests to Pending", key="reset_all_demo"):
+            try:
+                # Execute SQL to reset all 10 demo requests
+                w = WorkspaceClient()
+                result = w.statement_execution.execute_statement(
+                    warehouse_id=WAREHOUSE_ID,
+                    catalog=CATALOG,
+                    schema=SCHEMA,
+                    statement=f"""
+                    UPDATE {CATALOG}.{SCHEMA}.authorization_requests
+                    SET decision = NULL,
+                        decision_date = NULL,
+                        confidence_score = NULL,
+                        mcg_code = NULL,
+                        explanation = NULL,
+                        reviewed_by = NULL,
+                        updated_at = CURRENT_TIMESTAMP()
+                    WHERE request_id LIKE 'PA-2024-12-26-%'
+                    """,
+                    wait_timeout="50s"
+                )
+                st.success("✅ All 10 demo requests reset to PENDING")
+                # Refresh the queue
+                st.session_state.pending_requests = load_pending_requests()
+                st.rerun()
+            except Exception as e:
+                st.error(f"❌ Reset failed: {str(e)}")
+    
+    with col2:
+        st.info("Or select individual processed requests below to reset")
+    
+    # Show processed requests that can be reset
+    try:
+        w = WorkspaceClient()
+        result = w.statement_execution.execute_statement(
+            warehouse_id=WAREHOUSE_ID,
+            catalog=CATALOG,
+            schema=SCHEMA,
+            statement=f"""
+            SELECT request_id, patient_id, procedure_code, decision, confidence_score
+            FROM {CATALOG}.{SCHEMA}.authorization_requests
+            WHERE decision IS NOT NULL
+            AND request_id LIKE 'PA-2024-12-26-%'
+            ORDER BY decision_date DESC
+            LIMIT 10
+            """,
+            wait_timeout="50s"
+        )
+        
+        if result.result and result.result.data_array and len(result.result.data_array) > 0:
+            st.markdown("#### ✅ Processed Demo Requests (Click to Reset)")
+            for row in result.result.data_array:
+                req_id, patient_id, proc_code, decision, confidence = row
+                confidence_pct = int(float(confidence) * 100) if confidence else 0
+                decision_icon = "✅" if decision == "APPROVED" else "⚠️" if decision == "MANUAL_REVIEW" else "❌"
+                
+                if st.button(
+                    f"{decision_icon} **{req_id}** | {patient_id} | CPT {proc_code} | {decision} ({confidence_pct}%)",
+                    key=f"reset_{req_id}"
+                ):
+                    try:
+                        w.statement_execution.execute_statement(
+                            warehouse_id=WAREHOUSE_ID,
+                            catalog=CATALOG,
+                            schema=SCHEMA,
+                            statement=f"""
+                            UPDATE {CATALOG}.{SCHEMA}.authorization_requests
+                            SET decision = NULL,
+                                decision_date = NULL,
+                                confidence_score = NULL,
+                                mcg_code = NULL,
+                                explanation = NULL,
+                                reviewed_by = NULL,
+                                updated_at = CURRENT_TIMESTAMP()
+                            WHERE request_id = '{req_id}'
+                            """,
+                            wait_timeout="50s"
+                        )
+                        st.success(f"✅ {req_id} reset to PENDING")
+                        st.session_state.pending_requests = load_pending_requests()
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"❌ Reset failed: {str(e)}")
+        else:
+            st.info("ℹ️ No processed requests to reset yet.")
+    except Exception as e:
+        st.warning(f"⚠️ Could not load processed requests: {str(e)}")
 
 # TAB 2: SAMPLE CASES (Demo/testing)
 with tab2:
