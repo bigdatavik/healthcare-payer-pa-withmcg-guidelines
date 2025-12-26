@@ -223,23 +223,55 @@ pa_df = pd.DataFrame(demo_requests)
 # DON'T convert datetime to string - keep as datetime for TIMESTAMP column
 # The table schema expects TIMESTAMP, not STRING
 
-# Add default values for optional fields
-pa_df['decision'] = None
-pa_df['decision_date'] = None
-pa_df['explanation'] = None
-pa_df['confidence_score'] = None
-pa_df['processing_time_seconds'] = None
+# Remove fields that don't exist in the table schema
+if 'request_status' in pa_df.columns:
+    pa_df = pa_df.drop(columns=['request_status'])
+if 'processing_time_seconds' in pa_df.columns:
+    pa_df = pa_df.drop(columns=['processing_time_seconds'])
+
+# Add created_at and updated_at timestamps
+pa_df['created_at'] = pa_df['request_date']  # Use request_date as created_at
+pa_df['updated_at'] = pa_df['request_date']  # Use request_date as updated_at
+
+# Note: decision, mcg_code, explanation, etc. will be added as NULL columns in Spark
+# We'll add them after converting to Spark DataFrame to ensure correct types
 
 # Convert to Spark DataFrame
 spark_df = spark.createDataFrame(pa_df)
 
+# Cast decision column to STRING type (not void)
+from pyspark.sql.functions import col, lit
+from pyspark.sql.types import StringType, DoubleType, TimestampType
+
+spark_df = spark_df \
+    .withColumn("decision", lit(None).cast(StringType())) \
+    .withColumn("decision_date", lit(None).cast(TimestampType())) \
+    .withColumn("explanation", lit(None).cast(StringType())) \
+    .withColumn("confidence_score", lit(None).cast(DoubleType())) \
+    .withColumn("mcg_code", lit(None).cast(StringType())) \
+    .withColumn("reviewed_by", lit(None).cast(StringType()))
+
 # COMMAND ----------
 
-# Write to table (overwrite mode to ensure clean data)
+# Write to table - select columns in the exact order of the table schema
 table_name = f"{catalog_name}.{schema_name}.authorization_requests"
 
-# Use overwriteSchema to replace the table schema with our new schema
-spark_df.write.mode("overwrite").option("overwriteSchema", "true").saveAsTable(table_name)
+# First, clear existing data
+spark.sql(f"DELETE FROM {table_name}")
+
+# Select columns to match table schema exactly
+columns_ordered = [
+    'request_id', 'patient_id', 'provider_id', 'procedure_code', 'procedure_description',
+    'diagnosis_code', 'diagnosis_description', 'clinical_notes', 'urgency_level',
+    'insurance_plan', 'request_date', 'procedure_code_2', 'decision', 'decision_date',
+    'confidence_score', 'mcg_code', 'explanation', 'reviewed_by', 'created_at', 'updated_at'
+]
+
+# Select and order columns
+df_ordered = spark_df.select(*columns_ordered)
+
+# Insert data (this will preserve the table schema)
+df_ordered.write.mode("append").insertInto(table_name)
 
 print(f"✅ Loaded {spark_df.count()} PA requests into table: {table_name}")
 

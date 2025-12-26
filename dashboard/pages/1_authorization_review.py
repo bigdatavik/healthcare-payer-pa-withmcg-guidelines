@@ -190,17 +190,17 @@ def load_pending_requests():
             patient_id,
             procedure_code,
             diagnosis_code,
-            urgency,
-            created_at
+            urgency_level as urgency,
+            request_date
         FROM {REQUESTS_TABLE}
         WHERE decision IS NULL
         ORDER BY 
             CASE 
-                WHEN urgency = 'STAT' THEN 1
-                WHEN urgency = 'URGENT' THEN 2
+                WHEN urgency_level = 'STAT' THEN 1
+                WHEN urgency_level = 'URGENT' THEN 2
                 ELSE 3
             END,
-            created_at ASC
+            request_date ASC
         """
         
         result = w.statement_execution.execute_statement(
@@ -220,7 +220,7 @@ def load_pending_requests():
                         'procedure_code': row[2],
                         'diagnosis_code': row[3],
                         'urgency': row[4],
-                        'created_at': row[5]
+                        'created_at': row[5]  # Using request_date as created_at
                     })
                 return pending
         return []
@@ -244,8 +244,7 @@ def load_patient_clinical_notes(patient_id):
         SELECT content
         FROM {CLINICAL_TABLE}
         WHERE patient_id = '{patient_id}'
-        AND chunk_index = 0
-        ORDER BY created_at DESC
+        ORDER BY record_date DESC
         LIMIT 10
         """
         
