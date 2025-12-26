@@ -138,3 +138,4 @@ backup/
 data/
 *.csv
 *.parquet
+dashboard/backups/
