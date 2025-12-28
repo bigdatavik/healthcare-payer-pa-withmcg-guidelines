@@ -693,7 +693,7 @@ SAMPLE_REQUESTS = {
         "urgency": "URGENT",
         "notes": "68-year-old female with severe osteoarthritis right knee. X-ray shows complete loss of joint space. Failed 12 weeks conservative management including PT, injections, NSAIDs. Unable to climb stairs or walk >100 feet. BMI 28."
     },
-    "Lumbar Fusion (SHOULD MANUAL REVIEW - 70%)": {
+    "Lumbar Fusion (DENIED - 0%)": {
         "patient_id": "PT00025",
         "procedure_code": "22630",
         "diagnosis_code": "M51.26",
