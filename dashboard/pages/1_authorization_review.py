@@ -753,12 +753,9 @@ with tab1:
         
         # Add select all checkbox
         select_all = st.checkbox("Select All", key="select_all_queue")
-        if select_all:
-            selected_requests = [req['request_id'] for req in st.session_state.pending_requests]
-        else:
-            selected_requests = []
         
         # Display each request as a selectable row
+        selected_requests = []  # Initialize empty list
         for idx, req in enumerate(st.session_state.pending_requests):
             urgency_icon = "🔴" if req['urgency'] == "STAT" else "🟡" if req['urgency'] == "URGENT" else "🟢"
             
@@ -767,17 +764,17 @@ with tab1:
                 is_selected = st.checkbox(
                     "Select", 
                     key=f"select_{req['request_id']}", 
-                    value=(req['request_id'] in selected_requests),
+                    value=select_all,  # Use select_all checkbox value
                     label_visibility="collapsed"
                 )
-                if is_selected and req['request_id'] not in selected_requests:
-                    selected_requests.append(req['request_id'])
+                if is_selected:
+                    selected_requests.append(req['request_id'])  # Track selection
             with col2:
                 if st.button(
                     f"{urgency_icon} **{req['request_id']}** | Patient: {req['patient_id']} | CPT: {req['procedure_code']} | ICD: {req['diagnosis_code']}", 
                     key=f"queue_{req['request_id']}"
                 ):
-                    # Load full request data
+                    # Load full request data (DO NOT CHANGE - WORKING)
                     st.session_state.selected_request = {
                         'source': 'queue',
                         'request_id': req['request_id'],
@@ -795,21 +792,227 @@ with tab1:
             st.markdown(f"---")
             st.markdown(f"#### 🎯 Batch Actions ({len(selected_requests)} selected)")
             
-            col1, col2, col3 = st.columns(3)
+            col1, col2 = st.columns([1, 2])
             with col1:
                 if st.button("🚀 Process Selected Batch", key="process_batch", type="primary"):
-                    st.info("⏳ Batch processing will be implemented in Phase 2")
-                    st.markdown("**Planned Features:**")
-                    st.markdown("- Process multiple requests in parallel")
-                    st.markdown("- Progress bar for batch processing")
-                    st.markdown("- Summary report of batch results")
+                    st.session_state.batch_processing = True
+                    st.session_state.batch_request_ids = selected_requests.copy()
+                    st.rerun()
             with col2:
-                if st.button("📊 View Selected Details", key="view_batch_details"):
-                    st.write("Selected Request IDs:")
-                    for req_id in selected_requests:
-                        st.write(f"- {req_id}")
+                est_time = len(selected_requests) * 20  # 20 seconds per request
+                st.caption(f"⏱️ Estimated time: ~{est_time} seconds ({len(selected_requests)} requests)")
     else:
         st.info("ℹ️ No pending PA requests in queue. Try Sample Cases tab to test the system.")
+    
+    # ============================================
+    # BATCH PROCESSING ENGINE
+    # ============================================
+    if st.session_state.get('batch_processing', False):
+        st.markdown("---")
+        st.markdown("### 🤖 Batch Processing PA Requests")
+        
+        batch_request_ids = st.session_state.get('batch_request_ids', [])
+        selected_batch_requests = [r for r in st.session_state.pending_requests 
+                                    if r['request_id'] in batch_request_ids]
+        
+        if not selected_batch_requests:
+            st.error("❌ No requests to process")
+            st.session_state.batch_processing = False
+            st.rerun()
+        
+        # Progress tracking
+        total_requests = len(selected_batch_requests)
+        progress_bar = st.progress(0.0)
+        status_text = st.empty()
+        
+        # Results storage
+        if 'batch_results' not in st.session_state:
+            st.session_state.batch_results = []
+        
+        # Create the workflow once (reuse for all requests)
+        workflow = create_pa_workflow(_version="v5")
+        
+        if not workflow:
+            st.error("❌ Failed to create LangGraph workflow")
+            st.session_state.batch_processing = False
+            st.rerun()
+        
+        # Process each request
+        for i, req in enumerate(selected_batch_requests):
+            status_text.markdown(f"**Processing {i+1}/{total_requests}:** {req['request_id']} - Patient: {req['patient_id']}")
+            
+            try:
+                # Initialize state for this request
+                initial_state = {
+                    "patient_id": req['patient_id'],
+                    "procedure_code": req['procedure_code'],
+                    "diagnosis_code": req['diagnosis_code'],
+                    "patient_clinical_records": "",
+                    "mcg_guideline": {},
+                    "questions": [],
+                    "current_question_idx": 0,
+                    "mcg_answers": [],
+                    "decision": "MANUAL_REVIEW",
+                    "confidence": 0.5,
+                    "messages": []
+                }
+                
+                # Execute workflow (no streaming for batch)
+                final_state = None
+                for state_update in workflow.stream(initial_state):
+                    for node_name, node_output in state_update.items():
+                        if not final_state:
+                            final_state = initial_state.copy()
+                        for key, value in node_output.items():
+                            if key == 'mcg_answers' or key == 'messages':
+                                if key not in final_state:
+                                    final_state[key] = []
+                                if isinstance(value, list):
+                                    final_state[key].extend(value)
+                            else:
+                                final_state[key] = value
+                
+                # Extract results
+                decision = final_state.get('decision', 'MANUAL_REVIEW')
+                confidence = final_state.get('confidence', 0.5)
+                mcg_code = final_state.get('mcg_guideline', {}).get('guideline_id', 'UNKNOWN')
+                mcg_answers = final_state.get('mcg_answers', [])
+                yes_count = sum(1 for a in mcg_answers if a['answer'] == "YES")
+                total_questions = len(final_state.get('questions', []))
+                
+                # Generate explanation
+                explanation = f"Batch processed: {yes_count}/{total_questions} MCG criteria met. Confidence: {confidence*100:.0f}%"
+                
+                # Save to database
+                save_success = update_pa_decision(
+                    req['request_id'],
+                    decision,
+                    mcg_code,
+                    explanation,
+                    confidence
+                )
+                
+                # Save audit trail
+                if save_success:
+                    for j, qa in enumerate(mcg_answers, 1):
+                        save_audit_trail_entry(
+                            req['request_id'],
+                            j,
+                            qa.get('question', ''),
+                            qa.get('answer', ''),
+                            qa.get('evidence', ''),
+                            'CLINICAL_RECORD',
+                            qa.get('confidence', 0.0)
+                        )
+                
+                # Store result
+                st.session_state.batch_results.append({
+                    'request_id': req['request_id'],
+                    'patient_id': req['patient_id'],
+                    'procedure_code': req['procedure_code'],
+                    'decision': decision,
+                    'confidence': confidence,
+                    'mcg_code': mcg_code,
+                    'yes_count': yes_count,
+                    'total_questions': total_questions,
+                    'status': '✅ SUCCESS' if save_success else '⚠️ SAVED LOCALLY'
+                })
+                
+            except Exception as e:
+                st.session_state.batch_results.append({
+                    'request_id': req['request_id'],
+                    'patient_id': req['patient_id'],
+                    'procedure_code': req['procedure_code'],
+                    'decision': 'ERROR',
+                    'confidence': 0.0,
+                    'mcg_code': 'N/A',
+                    'yes_count': 0,
+                    'total_questions': 0,
+                    'status': f'❌ ERROR: {str(e)[:100]}'
+                })
+            
+            # Update progress
+            progress = (i + 1) / total_requests
+            progress_bar.progress(progress)
+        
+        # Mark processing complete
+        status_text.markdown(f"**✅ Batch processing complete!** Processed {total_requests} requests.")
+        st.session_state.batch_processing = False
+        st.session_state.show_batch_results = True
+        time.sleep(1)
+        st.rerun()
+    
+    # ============================================
+    # BATCH RESULTS SUMMARY
+    # ============================================
+    if st.session_state.get('show_batch_results', False) and st.session_state.get('batch_results'):
+        st.markdown("---")
+        st.markdown("### 📊 Batch Processing Results")
+        
+        results = st.session_state.batch_results
+        
+        # Summary metrics
+        col1, col2, col3, col4 = st.columns(4)
+        
+        approved_count = sum(1 for r in results if r['decision'] == 'APPROVED')
+        denied_count = sum(1 for r in results if r['decision'] == 'DENIED')
+        manual_count = sum(1 for r in results if r['decision'] == 'MANUAL_REVIEW')
+        error_count = sum(1 for r in results if r['decision'] == 'ERROR')
+        
+        col1.metric("✅ Approved", approved_count)
+        col2.metric("⚠️ Manual Review", manual_count)
+        col3.metric("❌ Denied", denied_count)
+        col4.metric("🔴 Errors", error_count)
+        
+        # Results table
+        st.markdown("#### Detailed Results")
+        
+        results_df = pd.DataFrame(results)
+        
+        # Format for display
+        display_df = pd.DataFrame({
+            'Request ID': results_df['request_id'],
+            'Patient': results_df['patient_id'],
+            'Procedure': results_df['procedure_code'],
+            'Decision': results_df['decision'].apply(lambda x: 
+                f"✅ {x}" if x == "APPROVED" else 
+                f"❌ {x}" if x == "DENIED" else 
+                f"⚠️ {x}" if x == "MANUAL_REVIEW" else 
+                f"🔴 {x}"
+            ),
+            'Confidence': results_df['confidence'].apply(lambda x: f"{x*100:.0f}%"),
+            'MCG Code': results_df['mcg_code'],
+            'Criteria Met': results_df.apply(lambda r: f"{r['yes_count']}/{r['total_questions']}", axis=1),
+            'Status': results_df['status']
+        })
+        
+        st.dataframe(display_df, use_container_width=True, height=400)
+        
+        # Download results
+        csv = results_df.to_csv(index=False)
+        st.download_button(
+            label="📥 Download Results (CSV)",
+            data=csv,
+            file_name=f"batch_pa_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+            mime="text/csv",
+            key="download_batch_results"
+        )
+        
+        # Clear and refresh
+        st.markdown("---")
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("🔄 Process Another Batch", type="primary", use_container_width=True):
+                st.session_state.batch_results = []
+                st.session_state.show_batch_results = False
+                st.session_state.pending_requests = load_pending_requests()
+                st.rerun()
+        with col2:
+            if st.button("✅ Done - Return to Queue", use_container_width=True):
+                st.session_state.batch_results = []
+                st.session_state.show_batch_results = False
+                st.session_state.pending_requests = load_pending_requests()
+                st.rerun()
     
     # Demo Reset Section
     st.markdown("---")
