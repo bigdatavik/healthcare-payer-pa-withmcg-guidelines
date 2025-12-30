@@ -1069,7 +1069,7 @@ with tab1:
                         explanation = NULL,
                         reviewed_by = NULL,
                         updated_at = CURRENT_TIMESTAMP()
-                    WHERE request_id LIKE 'PA-2024-12-26-%'
+                    WHERE request_id LIKE 'PA0%'
                     """,
                     wait_timeout="50s"
                 )
@@ -1094,7 +1094,7 @@ with tab1:
             SELECT request_id, patient_id, procedure_code, decision, confidence_score
             FROM {CATALOG}.{SCHEMA}.authorization_requests
             WHERE decision IS NOT NULL
-            AND request_id LIKE 'PA-2024-12-26-%'
+            AND request_id LIKE 'PA0%'
             ORDER BY decision_date DESC
             LIMIT 10
             """,
