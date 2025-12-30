@@ -276,6 +276,9 @@ def update_pa_decision(request_id, decision, mcg_code, explanation, confidence_s
         mcg_code: MCG guideline code
         explanation: Human-readable explanation
         confidence_score: Overall confidence (0.0-1.0)
+    
+    Returns:
+        tuple: (success: bool, error_message: str or None)
     """
     try:
         # Escape single quotes in explanation
@@ -307,16 +310,18 @@ def update_pa_decision(request_id, decision, mcg_code, explanation, confidence_s
             status_state = result.status.state if hasattr(result.status, 'state') else None
             if status_state:
                 state_value = status_state.value if hasattr(status_state, 'value') else str(status_state)
-                return state_value == "SUCCEEDED"
+                if state_value == "SUCCEEDED":
+                    return (True, None)
+                else:
+                    return (False, f"Statement execution state: {state_value}")
         
         # If no clear status, assume success if no exception was raised
-        return True
+        return (True, None)
     
     except Exception as e:
-        st.error(f"❌ Error updating PA decision for {request_id}: {e}")
         import traceback
-        st.error(traceback.format_exc())
-        return False
+        error_msg = f"{str(e)} | {traceback.format_exc()}"
+        return (False, error_msg[:500])
 
 def save_audit_trail_entry(request_id, question_number, question_text, answer, 
                            evidence, evidence_source, confidence):
@@ -907,7 +912,7 @@ with tab1:
                 explanation = f"Batch processed: {yes_count}/{total_questions} MCG criteria met. Confidence: {confidence*100:.0f}%"
                 
                 # Save to database
-                save_success = update_pa_decision(
+                save_success, error_msg = update_pa_decision(
                     req['request_id'],
                     decision,
                     mcg_code,
@@ -928,6 +933,9 @@ with tab1:
                             qa.get('confidence', 0.0)
                         )
                 
+                # Store result with error message if failed
+                status_msg = '✅ SUCCESS' if save_success else f'⚠️ SAVE FAILED: {error_msg[:200] if error_msg else "Unknown error"}'
+                
                 # Store result
                 st.session_state.batch_results.append({
                     'request_id': req['request_id'],
@@ -938,7 +946,7 @@ with tab1:
                     'mcg_code': mcg_code,
                     'yes_count': yes_count,
                     'total_questions': total_questions,
-                    'status': '✅ SUCCESS' if save_success else '⚠️ SAVED LOCALLY'
+                    'status': status_msg
                 })
                 
             except Exception as e:
