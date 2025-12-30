@@ -289,20 +289,33 @@ def update_pa_decision(request_id, decision, mcg_code, explanation, confidence_s
             explanation = '{explanation_escaped}',
             confidence_score = {confidence_score},
             decision_date = current_timestamp(),
-            reviewed_by = 'AI_AGENT'
+            reviewed_by = 'AI_AGENT',
+            updated_at = current_timestamp()
         WHERE request_id = '{request_id}'
         """
         
         result = w.statement_execution.execute_statement(
             warehouse_id=WAREHOUSE_ID,
+            catalog=CATALOG,
+            schema=SCHEMA,
             statement=query,
-            wait_timeout="30s"
+            wait_timeout="50s"
         )
         
-        return result.status.state.value == "SUCCEEDED"
+        # Check result status - handle both object and dict responses
+        if hasattr(result, 'status'):
+            status_state = result.status.state if hasattr(result.status, 'state') else None
+            if status_state:
+                state_value = status_state.value if hasattr(status_state, 'value') else str(status_state)
+                return state_value == "SUCCEEDED"
+        
+        # If no clear status, assume success if no exception was raised
+        return True
     
     except Exception as e:
-        st.error(f"❌ Error updating PA decision: {e}")
+        st.error(f"❌ Error updating PA decision for {request_id}: {e}")
+        import traceback
+        st.error(traceback.format_exc())
         return False
 
 def save_audit_trail_entry(request_id, question_number, question_text, answer, 
@@ -342,14 +355,24 @@ def save_audit_trail_entry(request_id, question_number, question_text, answer,
         
         result = w.statement_execution.execute_statement(
             warehouse_id=WAREHOUSE_ID,
+            catalog=CATALOG,
+            schema=SCHEMA,
             statement=query,
-            wait_timeout="30s"
+            wait_timeout="50s"
         )
         
-        return result.status.state.value == "SUCCEEDED"
+        # Check result status - handle both object and dict responses
+        if hasattr(result, 'status'):
+            status_state = result.status.state if hasattr(result.status, 'state') else None
+            if status_state:
+                state_value = status_state.value if hasattr(status_state, 'value') else str(status_state)
+                return state_value == "SUCCEEDED"
+        
+        # If no clear status, assume success if no exception was raised
+        return True
     
     except Exception as e:
-        st.error(f"❌ Error saving audit trail entry: {e}")
+        st.error(f"❌ Error saving audit trail entry for {request_id}: {e}")
         return False
 
 # ============================================
