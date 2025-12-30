@@ -323,6 +323,56 @@ def update_pa_decision(request_id, decision, mcg_code, explanation, confidence_s
         error_msg = f"{str(e)} | {traceback.format_exc()}"
         return (False, error_msg[:500])
 
+def load_audit_trail(request_id):
+    """
+    Load Q&A audit trail for a specific request
+    
+    Args:
+        request_id: PA request ID
+    
+    Returns:
+        List of dicts with Q&A details
+    """
+    try:
+        query = f"""
+        SELECT 
+            question_number,
+            question_text,
+            answer,
+            evidence,
+            evidence_source,
+            confidence_score
+        FROM {AUDIT_TRAIL_TABLE}
+        WHERE request_id = '{request_id}'
+        ORDER BY question_number ASC
+        """
+        
+        result = w.statement_execution.execute_statement(
+            warehouse_id=WAREHOUSE_ID,
+            catalog=CATALOG,
+            schema=SCHEMA,
+            statement=query,
+            wait_timeout="30s"
+        )
+        
+        if result.result and result.result.data_array:
+            audit_entries = []
+            for row in result.result.data_array:
+                audit_entries.append({
+                    'question_number': row[0],
+                    'question_text': row[1],
+                    'answer': row[2],
+                    'evidence': row[3],
+                    'evidence_source': row[4],
+                    'confidence_score': row[5]
+                })
+            return audit_entries
+        return []
+    
+    except Exception as e:
+        st.error(f"Error loading audit trail: {e}")
+        return []
+
 def save_audit_trail_entry(request_id, question_number, question_text, answer, 
                            evidence, evidence_source, confidence):
     """
@@ -999,29 +1049,61 @@ with tab1:
         col3.metric("❌ Denied", denied_count)
         col4.metric("🔴 Errors", error_count)
         
-        # Results table
+        # Results table with expandable details
         st.markdown("#### Detailed Results")
         
-        results_df = pd.DataFrame(results)
-        
-        # Format for display
-        display_df = pd.DataFrame({
-            'Request ID': results_df['request_id'],
-            'Patient': results_df['patient_id'],
-            'Procedure': results_df['procedure_code'],
-            'Decision': results_df['decision'].apply(lambda x: 
-                f"✅ {x}" if x == "APPROVED" else 
-                f"❌ {x}" if x == "DENIED" else 
-                f"⚠️ {x}" if x == "MANUAL_REVIEW" else 
-                f"🔴 {x}"
-            ),
-            'Confidence': results_df['confidence'].apply(lambda x: f"{x*100:.0f}%"),
-            'MCG Code': results_df['mcg_code'],
-            'Criteria Met': results_df.apply(lambda r: f"{r['yes_count']}/{r['total_questions']}", axis=1),
-            'Status': results_df['status']
-        })
-        
-        st.dataframe(display_df, use_container_width=True, height=400)
+        for idx, result in enumerate(results):
+            req_id = result['request_id']
+            decision = result['decision']
+            confidence = result['confidence']
+            mcg_code = result['mcg_code']
+            yes_count = result['yes_count']
+            total_questions = result['total_questions']
+            patient_id = result['patient_id']
+            procedure_code = result['procedure_code']
+            status = result['status']
+            
+            # Decision icon
+            decision_icon = "✅" if decision == "APPROVED" else "❌" if decision == "DENIED" else "⚠️" if decision == "MANUAL_REVIEW" else "🔴"
+            
+            # Expandable row
+            with st.expander(
+                f"{decision_icon} **{req_id}** | {patient_id} | CPT {procedure_code} | {decision} ({confidence*100:.0f}%) | MCG {mcg_code} | {yes_count}/{total_questions} criteria met",
+                expanded=False
+            ):
+                # Show basic info
+                col1, col2, col3, col4 = st.columns(4)
+                col1.metric("Decision", decision)
+                col2.metric("Confidence", f"{confidence*100:.0f}%")
+                col3.metric("MCG Code", mcg_code)
+                col4.metric("Criteria Met", f"{yes_count}/{total_questions}")
+                
+                st.markdown(f"**Status:** {status}")
+                
+                # Load and display audit trail
+                st.markdown("---")
+                st.markdown("##### 📋 Question & Answer Breakdown")
+                
+                audit_trail = load_audit_trail(req_id)
+                
+                if audit_trail:
+                    for qa in audit_trail:
+                        q_num = qa['question_number']
+                        question = qa['question_text']
+                        answer = qa['answer']
+                        evidence = qa['evidence']
+                        conf = qa['confidence_score']
+                        
+                        # Color code answer
+                        answer_color = "green" if answer == "YES" else "red" if answer == "NO" else "orange"
+                        answer_icon = "✅" if answer == "YES" else "❌" if answer == "NO" else "⚠️"
+                        
+                        st.markdown(f"**Q{q_num}: {question}**")
+                        st.markdown(f"{answer_icon} **Answer:** :{answer_color}[{answer}] (Confidence: {conf*100:.0f}%)")
+                        st.markdown(f"**Evidence:** {evidence}")
+                        st.markdown("---")
+                else:
+                    st.info("No audit trail found for this request")
         
         # Download results
         csv = results_df.to_csv(index=False)
