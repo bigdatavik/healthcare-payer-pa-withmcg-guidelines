@@ -40,19 +40,31 @@ databricks grants update catalog $CATALOG --profile $PROFILE \
 echo "   ✅ USE_CATALOG granted on $CATALOG"
 
 # Grant schema permissions
-echo "📋 2/3: Granting schema permissions..."
+echo "📋 2/5: Granting schema permissions..."
 databricks grants update schema $CATALOG.$SCHEMA --profile $PROFILE \
   --json "{\"changes\": [{\"principal\": \"$SP_CLIENT_ID\", \"add\": [\"USE_SCHEMA\", \"SELECT\"]}]}"
 echo "   ✅ USE_SCHEMA, SELECT granted on $CATALOG.$SCHEMA"
 
+# Grant MODIFY permissions on authorization_requests table
+echo "📋 3/5: Granting MODIFY on authorization_requests table..."
+databricks grants update table $CATALOG.$SCHEMA.authorization_requests --profile $PROFILE \
+  --json "{\"changes\": [{\"principal\": \"$SP_CLIENT_ID\", \"add\": [\"MODIFY\", \"SELECT\"]}]}"
+echo "   ✅ MODIFY, SELECT granted on authorization_requests"
+
+# Grant MODIFY permissions on pa_audit_trail table
+echo "📋 4/5: Granting MODIFY on pa_audit_trail table..."
+databricks grants update table $CATALOG.$SCHEMA.pa_audit_trail --profile $PROFILE \
+  --json "{\"changes\": [{\"principal\": \"$SP_CLIENT_ID\", \"add\": [\"MODIFY\", \"SELECT\"]}]}"
+echo "   ✅ MODIFY, SELECT granted on pa_audit_trail"
+
 # Grant warehouse permissions
-echo "📋 3/4: Granting warehouse permissions..."
+echo "📋 5/5: Granting warehouse permissions..."
 databricks permissions update sql/warehouses $WAREHOUSE_ID --profile $PROFILE \
   --json "{\"access_control_list\": [{\"service_principal_name\": \"$SP_CLIENT_ID\", \"permission_level\": \"CAN_USE\"}]}"
 echo "   ✅ CAN_USE granted on warehouse $WAREHOUSE_ID"
 
 # Grant EXECUTE permissions on UC functions
-echo "📋 4/4: Granting EXECUTE permissions on UC functions..."
+echo "📋 6/6: Granting EXECUTE permissions on UC functions..."
 FUNCTIONS=("check_mcg_guidelines" "answer_mcg_question" "explain_decision" "extract_clinical_criteria")
 for FUNCTION in "${FUNCTIONS[@]}"; do
     databricks grants update function $CATALOG.$SCHEMA.$FUNCTION --profile $PROFILE \
