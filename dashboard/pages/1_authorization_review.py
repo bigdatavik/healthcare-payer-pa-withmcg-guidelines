@@ -1399,7 +1399,7 @@ if st.session_state.selected_request:
                     explanation = f"Answered {yes_count} of {total_questions} MCG questions affirmatively. Confidence: {confidence*100:.0f}%."
                     
                     # Save main decision
-                    success = update_pa_decision(
+                    success, error_msg = update_pa_decision(
                         req['request_id'],
                         decision,
                         mcg_code,
