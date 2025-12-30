@@ -537,19 +537,23 @@ try:
         # Count records
         if "No records found" in patient_records or "Error" in patient_records:
             record_count = 0
-            st.warning(f"⚠️ {patient_records}")
+            # Only show warning in interactive mode (not batch processing)
+            if not st.session_state.get('batch_processing', False):
+                st.warning(f"⚠️ {patient_records}")
         else:
             record_count = patient_records.count("Record ")
-            st.success(f"✅ Loaded {record_count} clinical records")
-            
-            # DISPLAY RECORDS so user can see them
-            with st.expander(f"📄 View {record_count} Clinical Records", expanded=False):
-                # Split by separator and show each record
-                records = patient_records.split("\n\n---\n\n")
-                for i, record in enumerate(records[:5], 1):  # Show first 5
-                    st.text_area(f"Record {i}", record, height=150, key=f"record_{i}")
-                if len(records) > 5:
-                    st.info(f"... and {len(records) - 5} more records")
+            # Only show success and records in interactive mode (not batch processing)
+            if not st.session_state.get('batch_processing', False):
+                st.success(f"✅ Loaded {record_count} clinical records")
+                
+                # DISPLAY RECORDS so user can see them
+                with st.expander(f"📄 View {record_count} Clinical Records", expanded=False):
+                    # Split by separator and show each record
+                    records = patient_records.split("\n\n---\n\n")
+                    for i, record in enumerate(records[:5], 1):  # Show first 5
+                        st.text_area(f"Record {i}", record, height=150, key=f"record_{i}")
+                    if len(records) > 5:
+                        st.info(f"... and {len(records) - 5} more records")
         
         return {
             "patient_clinical_records": patient_records,
