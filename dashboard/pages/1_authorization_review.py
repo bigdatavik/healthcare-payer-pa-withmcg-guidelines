@@ -347,6 +347,10 @@ def load_audit_trail(request_id):
         ORDER BY question_number ASC
         """
         
+        # Debug: show the query
+        with st.expander(f"🐛 DEBUG: Query for {request_id}", expanded=False):
+            st.code(query, language="sql")
+        
         result = w.statement_execution.execute_statement(
             warehouse_id=WAREHOUSE_ID,
             catalog=CATALOG,
@@ -354,6 +358,15 @@ def load_audit_trail(request_id):
             statement=query,
             wait_timeout="30s"
         )
+        
+        # Debug: show result status
+        with st.expander(f"🐛 DEBUG: Result status", expanded=False):
+            if hasattr(result, 'status'):
+                st.write(f"Status: {result.status.state}")
+            if hasattr(result, 'result') and result.result:
+                st.write(f"Has result: {result.result}")
+                if hasattr(result.result, 'data_array'):
+                    st.write(f"Data array length: {len(result.result.data_array) if result.result.data_array else 0}")
         
         if result.result and result.result.data_array:
             audit_entries = []
@@ -371,6 +384,8 @@ def load_audit_trail(request_id):
     
     except Exception as e:
         st.error(f"Error loading audit trail: {e}")
+        import traceback
+        st.error(traceback.format_exc())
         return []
 
 def save_audit_trail_entry(request_id, question_number, question_text, answer, 
@@ -1104,6 +1119,9 @@ with tab1:
                         st.markdown("---")
                 else:
                     st.info("No audit trail found for this request")
+        
+        # Create DataFrame for CSV download
+        results_df = pd.DataFrame(results)
         
         # Download results
         csv = results_df.to_csv(index=False)
