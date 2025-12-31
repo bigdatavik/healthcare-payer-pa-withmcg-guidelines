@@ -341,15 +341,11 @@ def load_audit_trail(request_id):
             answer,
             evidence,
             evidence_source,
-            confidence_score
+            confidence
         FROM {AUDIT_TRAIL_TABLE}
         WHERE request_id = '{request_id}'
         ORDER BY question_number ASC
         """
-        
-        # Debug: show the query
-        st.markdown("**🐛 DEBUG: Query**")
-        st.code(query, language="sql")
         
         result = w.statement_execution.execute_statement(
             warehouse_id=WAREHOUSE_ID,
@@ -358,26 +354,6 @@ def load_audit_trail(request_id):
             statement=query,
             wait_timeout="30s"
         )
-        
-        # Debug: show result status with detailed error info
-        st.markdown("**🐛 DEBUG: Result**")
-        if hasattr(result, 'status'):
-            st.write(f"- Status: {result.status.state}")
-            # Check for error message
-            if hasattr(result.status, 'error'):
-                st.error(f"**Error Details:** {result.status.error}")
-        if hasattr(result, 'result') and result.result:
-            st.write(f"- Has result object: ✅")
-            if hasattr(result.result, 'data_array'):
-                data_len = len(result.result.data_array) if result.result.data_array else 0
-                st.write(f"- Data array length: {data_len}")
-            else:
-                st.write(f"- No data_array attribute")
-        else:
-            st.write(f"- No result object")
-            # Also check manifest for error details
-            if hasattr(result, 'manifest'):
-                st.write(f"- Manifest: {result.manifest}")
         
         if result.result and result.result.data_array:
             audit_entries = []
@@ -388,7 +364,7 @@ def load_audit_trail(request_id):
                     'answer': row[2],
                     'evidence': row[3],
                     'evidence_source': row[4],
-                    'confidence_score': row[5]
+                    'confidence': row[5]
                 })
             return audit_entries
         return []
@@ -1118,7 +1094,7 @@ with tab1:
                         question = qa['question_text']
                         answer = qa['answer']
                         evidence = qa['evidence']
-                        conf = qa['confidence_score']
+                        conf = qa['confidence']
                         
                         # Color code answer
                         answer_color = "green" if answer == "YES" else "red" if answer == "NO" else "orange"
