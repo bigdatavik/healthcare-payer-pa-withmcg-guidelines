@@ -359,10 +359,13 @@ def load_audit_trail(request_id):
             wait_timeout="30s"
         )
         
-        # Debug: show result status
+        # Debug: show result status with detailed error info
         st.markdown("**🐛 DEBUG: Result**")
         if hasattr(result, 'status'):
             st.write(f"- Status: {result.status.state}")
+            # Check for error message
+            if hasattr(result.status, 'error'):
+                st.error(f"**Error Details:** {result.status.error}")
         if hasattr(result, 'result') and result.result:
             st.write(f"- Has result object: ✅")
             if hasattr(result.result, 'data_array'):
@@ -372,6 +375,9 @@ def load_audit_trail(request_id):
                 st.write(f"- No data_array attribute")
         else:
             st.write(f"- No result object")
+            # Also check manifest for error details
+            if hasattr(result, 'manifest'):
+                st.write(f"- Manifest: {result.manifest}")
         
         if result.result and result.result.data_array:
             audit_entries = []
