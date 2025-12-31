@@ -1094,7 +1094,7 @@ with tab1:
                         question = qa['question_text']
                         answer = qa['answer']
                         evidence = qa['evidence']
-                        conf = qa['confidence']
+                        conf = float(qa['confidence']) if qa['confidence'] else 0.0
                         
                         # Color code answer
                         answer_color = "green" if answer == "YES" else "red" if answer == "NO" else "orange"
