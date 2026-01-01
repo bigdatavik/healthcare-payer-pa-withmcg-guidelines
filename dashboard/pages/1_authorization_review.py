@@ -1141,12 +1141,11 @@ with tab1:
     st.markdown("### 🔄 Demo Reset (For Testing)")
     st.info("💡 **Tip:** Use these tools to reset PA requests back to 'pending' for demo purposes.")
     
-    col1, col2 = st.columns(2)
+    col1, col2, col3 = st.columns(3)
     with col1:
-        if st.button("🔄 Reset All 10 Demo Requests to Pending", key="reset_all_demo"):
+        if st.button("🔄 Reset All 10 Demo Requests to Pending", key="reset_all_demo", use_container_width=True):
             try:
-                # Execute SQL to reset all 10 demo requests
-                w = WorkspaceClient()
+                # Use the cached WorkspaceClient (service principal)
                 result = w.statement_execution.execute_statement(
                     warehouse_id=WAREHOUSE_ID,
                     catalog=CATALOG,
@@ -1172,11 +1171,40 @@ with tab1:
                 st.error(f"❌ Reset failed: {str(e)}")
     
     with col2:
+        if st.button("🗑️ Reset pa_audit_trail Table", key="reset_audit_trail", use_container_width=True):
+            try:
+                # Use the cached WorkspaceClient (service principal)
+                result = w.statement_execution.execute_statement(
+                    warehouse_id=WAREHOUSE_ID,
+                    catalog=CATALOG,
+                    schema=SCHEMA,
+                    statement=f"""
+                    CREATE OR REPLACE TABLE {CATALOG}.{SCHEMA}.pa_audit_trail (
+                      audit_id STRING NOT NULL COMMENT 'Unique identifier: request_id_Q1, request_id_Q2, etc',
+                      request_id STRING NOT NULL COMMENT 'Links to authorization_requests.request_id',
+                      question_number INT NOT NULL COMMENT 'Sequential number: 1, 2, 3, 4...',
+                      question_text STRING NOT NULL COMMENT 'MCG/InterQual question text',
+                      answer STRING NOT NULL COMMENT 'YES or NO',
+                      evidence STRING COMMENT 'Clinical evidence used to answer',
+                      evidence_source STRING COMMENT 'CLINICAL_NOTE, LAB_RESULT, XRAY, PT_NOTE, etc',
+                      confidence DOUBLE COMMENT 'AI confidence for this answer (0.0-1.0)',
+                      created_at TIMESTAMP COMMENT 'When this Q&A was recorded'
+                    )
+                    USING DELTA
+                    COMMENT 'Detailed audit trail showing MCG Q&A breakdown with evidence for each PA request'
+                    """,
+                    wait_timeout="50s"
+                )
+                st.success("✅ pa_audit_trail table reset (all audit records cleared)")
+                st.rerun()
+            except Exception as e:
+                st.error(f"❌ Reset failed: {str(e)}")
+    
+    with col3:
         st.info("Or select individual processed requests below to reset")
     
     # Show processed requests that can be reset
     try:
-        w = WorkspaceClient()
         result = w.statement_execution.execute_statement(
             warehouse_id=WAREHOUSE_ID,
             catalog=CATALOG,
