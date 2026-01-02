@@ -133,9 +133,10 @@ Thumbs.db
 
 # Backup files
 backup/
+setup/backups/
+dashboard/backups/
 
 # Data files (if any)
 data/
 *.csv
 *.parquet
-dashboard/backups/
