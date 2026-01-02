@@ -42,8 +42,8 @@ echo "   ✅ USE_CATALOG granted on $CATALOG"
 # Grant schema permissions
 echo "📋 2/5: Granting schema permissions..."
 databricks grants update schema $CATALOG.$SCHEMA --profile $PROFILE \
-  --json "{\"changes\": [{\"principal\": \"$SP_CLIENT_ID\", \"add\": [\"USE_SCHEMA\", \"SELECT\"]}]}"
-echo "   ✅ USE_SCHEMA, SELECT granted on $CATALOG.$SCHEMA"
+  --json "{\"changes\": [{\"principal\": \"$SP_CLIENT_ID\", \"add\": [\"USE_SCHEMA\", \"SELECT\", \"MODIFY\"]}]}"
+echo "   ✅ USE_SCHEMA, SELECT, MODIFY granted on $CATALOG.$SCHEMA"
 
 # Grant MODIFY permissions on authorization_requests table
 echo "📋 3/5: Granting MODIFY on authorization_requests table..."
