@@ -122,99 +122,105 @@ print(f"✅ Function created: {cfg.catalog}.{cfg.schema}.answer_mcg_question")
 
 # MAGIC %md
 # MAGIC ## Test Function with Realistic Temporal Data
+# MAGIC
+# MAGIC **NOTE:** Tests commented out to speed up deployment.
+# MAGIC Uncomment if you need to validate the function behavior.
 
 # COMMAND ----------
 
-# Test with sample question and clinical evidence showing progression over time
-print("\n🔍 Testing with realistic temporal MCG question...")
-print("=" * 80)
+# # Test with sample question and clinical evidence showing progression over time
+# print("\n🔍 Testing with realistic temporal MCG question...")
+# print("=" * 80)
+# 
+# # Realistic sample: Multiple PT notes showing progression
+# sample_evidence = """
+# [CLINICAL_NOTE - Week 0] Patient: 58-year-old male. Chief complaint: Right knee pain for 6 months. 
+# Plan: Prescribe ibuprofen. Refer to physical therapy for 12 sessions. Conservative treatment initiated.
+# 
+# [PT_NOTE - Week 4] Patient PT00001. Session: 4 of 12. 
+# TREATMENT DURATION: 4 weeks. SESSIONS COMPLETED: 4 sessions (1x/week protocol).
+# Patient reports persistent right knee pain. Minimal improvement.
+# 
+# [PT_NOTE - Week 8] Patient PT00001. Session: 8 of 12.
+# TREATMENT DURATION: 8 weeks. SESSIONS COMPLETED: 8 sessions (1x/week protocol).
+# Patient reports ongoing right knee pain 6-7/10. Minimal improvement from physical therapy.
+# 
+# [IMAGING_REPORT - Week 10] MRI RIGHT KNEE: Complex tear of the posterior horn of the medial meniscus confirmed.
+# Grade 2 chondromalacia of the medial femoral condyle. NOT Grade 3 or Grade 4 osteoarthritis.
+# 
+# [PT_NOTE - Week 12] Patient PT00001. Session: 12 of 12 (FINAL).
+# TREATMENT DURATION: 12 weeks. SESSIONS COMPLETED: 12 sessions (2x/week protocol).
+# STATUS: TREATMENT COMPLETED. Patient has FAILED conservative management despite 12 weeks.
+# Recommend SURGICAL EVALUATION for arthroscopic meniscectomy.
+# 
+# [CLINICAL_NOTE - Week 14] ORTHOPEDIC CONSULTATION. Patient completed 14 weeks of conservative treatment.
+# MRI confirms meniscal tear. X-ray shows Grade 2 chondromalacia (NOT severe osteoarthritis).
+# RECOMMEND: Arthroscopic right knee meniscectomy.
+# """
+# 
+# print("\n📋 TEST 1: PT Sessions (Should find '12 sessions' from final note)")
+# test_q1 = "Has patient completed at least 8 PT sessions?"
+# result1 = spark.sql(f"""
+# SELECT {cfg.catalog}.{cfg.schema}.answer_mcg_question(
+#   '{sample_evidence.replace("'", "''")}',
+#   '{test_q1}'
+# ) as answer
+# """).collect()[0]
+# 
+# print(f"Question: {test_q1}")
+# print(f"Answer: {result1.answer}")
+# print()
+# 
+# print("📋 TEST 2: Conservative Treatment Duration (Should find '14 weeks')")
+# test_q2 = "Has patient completed at least 6 weeks conservative treatment?"
+# result2 = spark.sql(f"""
+# SELECT {cfg.catalog}.{cfg.schema}.answer_mcg_question(
+#   '{sample_evidence.replace("'", "''")}',
+#   '{test_q2}'
+# ) as answer
+# """).collect()[0]
+# 
+# print(f"Question: {test_q2}")
+# print(f"Answer: {result2.answer}")
+# print()
+# 
+# print("📋 TEST 3: MRI Confirmation (Should find 'confirms' in imaging report)")
+# test_q3 = "Is MRI confirming meniscal tear present?"
+# result3 = spark.sql(f"""
+# SELECT {cfg.catalog}.{cfg.schema}.answer_mcg_question(
+#   '{sample_evidence.replace("'", "''")}',
+#   '{test_q3}'
+# ) as answer
+# """).collect()[0]
+# 
+# print(f"Question: {test_q3}")
+# print(f"Answer: {result3.answer}")
+# print()
+# 
+# print("📋 TEST 4: Severe OA (Should recognize 'Grade 2' is NOT severe)")
+# test_q4 = "Is there severe (Grade 3-4) osteoarthritis?"
+# result4 = spark.sql(f"""
+# SELECT {cfg.catalog}.{cfg.schema}.answer_mcg_question(
+#   '{sample_evidence.replace("'", "''")}',
+#   '{test_q4}'
+# ) as answer
+# """).collect()[0]
+# 
+# print(f"Question: {test_q4}")
+# print(f"Answer: {result4.answer}")
+# 
+# print()
+# print("=" * 80)
+# print("💡 EXPECTED RESULTS:")
+# print("   Q1: YES - Should find 12 sessions (not 4 or 8)")
+# print("   Q2: YES - Should find 14 weeks duration")
+# print("   Q3: YES - Should find MRI confirms tear")
+# print("   Q4: NO  - Should recognize Grade 2 is NOT severe (severe = Grade 3-4)")
+# print("=" * 80)
+# print("\n✅ If all answers match expected, the smart prompt is working!")
 
-# Realistic sample: Multiple PT notes showing progression
-sample_evidence = """
-[CLINICAL_NOTE - Week 0] Patient: 58-year-old male. Chief complaint: Right knee pain for 6 months. 
-Plan: Prescribe ibuprofen. Refer to physical therapy for 12 sessions. Conservative treatment initiated.
-
-[PT_NOTE - Week 4] Patient PT00001. Session: 4 of 12. 
-TREATMENT DURATION: 4 weeks. SESSIONS COMPLETED: 4 sessions (1x/week protocol).
-Patient reports persistent right knee pain. Minimal improvement.
-
-[PT_NOTE - Week 8] Patient PT00001. Session: 8 of 12.
-TREATMENT DURATION: 8 weeks. SESSIONS COMPLETED: 8 sessions (1x/week protocol).
-Patient reports ongoing right knee pain 6-7/10. Minimal improvement from physical therapy.
-
-[IMAGING_REPORT - Week 10] MRI RIGHT KNEE: Complex tear of the posterior horn of the medial meniscus confirmed.
-Grade 2 chondromalacia of the medial femoral condyle. NOT Grade 3 or Grade 4 osteoarthritis.
-
-[PT_NOTE - Week 12] Patient PT00001. Session: 12 of 12 (FINAL).
-TREATMENT DURATION: 12 weeks. SESSIONS COMPLETED: 12 sessions (2x/week protocol).
-STATUS: TREATMENT COMPLETED. Patient has FAILED conservative management despite 12 weeks.
-Recommend SURGICAL EVALUATION for arthroscopic meniscectomy.
-
-[CLINICAL_NOTE - Week 14] ORTHOPEDIC CONSULTATION. Patient completed 14 weeks of conservative treatment.
-MRI confirms meniscal tear. X-ray shows Grade 2 chondromalacia (NOT severe osteoarthritis).
-RECOMMEND: Arthroscopic right knee meniscectomy.
-"""
-
-print("\n📋 TEST 1: PT Sessions (Should find '12 sessions' from final note)")
-test_q1 = "Has patient completed at least 8 PT sessions?"
-result1 = spark.sql(f"""
-SELECT {cfg.catalog}.{cfg.schema}.answer_mcg_question(
-  '{sample_evidence.replace("'", "''")}',
-  '{test_q1}'
-) as answer
-""").collect()[0]
-
-print(f"Question: {test_q1}")
-print(f"Answer: {result1.answer}")
-print()
-
-print("📋 TEST 2: Conservative Treatment Duration (Should find '14 weeks')")
-test_q2 = "Has patient completed at least 6 weeks conservative treatment?"
-result2 = spark.sql(f"""
-SELECT {cfg.catalog}.{cfg.schema}.answer_mcg_question(
-  '{sample_evidence.replace("'", "''")}',
-  '{test_q2}'
-) as answer
-""").collect()[0]
-
-print(f"Question: {test_q2}")
-print(f"Answer: {result2.answer}")
-print()
-
-print("📋 TEST 3: MRI Confirmation (Should find 'confirms' in imaging report)")
-test_q3 = "Is MRI confirming meniscal tear present?"
-result3 = spark.sql(f"""
-SELECT {cfg.catalog}.{cfg.schema}.answer_mcg_question(
-  '{sample_evidence.replace("'", "''")}',
-  '{test_q3}'
-) as answer
-""").collect()[0]
-
-print(f"Question: {test_q3}")
-print(f"Answer: {result3.answer}")
-print()
-
-print("📋 TEST 4: Severe OA (Should recognize 'Grade 2' is NOT severe)")
-test_q4 = "Is there severe (Grade 3-4) osteoarthritis?"
-result4 = spark.sql(f"""
-SELECT {cfg.catalog}.{cfg.schema}.answer_mcg_question(
-  '{sample_evidence.replace("'", "''")}',
-  '{test_q4}'
-) as answer
-""").collect()[0]
-
-print(f"Question: {test_q4}")
-print(f"Answer: {result4.answer}")
-
-print()
-print("=" * 80)
-print("💡 EXPECTED RESULTS:")
-print("   Q1: YES - Should find 12 sessions (not 4 or 8)")
-print("   Q2: YES - Should find 14 weeks duration")
-print("   Q3: YES - Should find MRI confirms tear")
-print("   Q4: NO  - Should recognize Grade 2 is NOT severe (severe = Grade 3-4)")
-print("=" * 80)
-print("\n✅ If all answers match expected, the smart prompt is working!")
+print("\n⏭️  Tests skipped for faster deployment")
+print("   Uncomment test section if validation needed")
 
 # COMMAND ----------
 

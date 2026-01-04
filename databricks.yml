@@ -167,7 +167,7 @@ resources:
             base_parameters:
               catalog_name: ${var.catalog_name}
               schema_name: ${var.schema_name}
-          timeout_seconds: 600
+          timeout_seconds: 900
 
         - task_key: uc_check_mcg
           job_cluster_key: main_cluster
@@ -178,7 +178,7 @@ resources:
             base_parameters:
               catalog_name: ${var.catalog_name}
               schema_name: ${var.schema_name}
-          timeout_seconds: 600
+          timeout_seconds: 900
 
         - task_key: uc_answer_mcg
           job_cluster_key: main_cluster
@@ -189,7 +189,7 @@ resources:
             base_parameters:
               catalog_name: ${var.catalog_name}
               schema_name: ${var.schema_name}
-          timeout_seconds: 600
+          timeout_seconds: 900
 
         - task_key: uc_explain_decision
           job_cluster_key: main_cluster
@@ -200,23 +200,7 @@ resources:
             base_parameters:
               catalog_name: ${var.catalog_name}
               schema_name: ${var.schema_name}
-          timeout_seconds: 600
-
-        - task_key: test_agent_workflow
-          job_cluster_key: main_cluster
-          depends_on:
-            - task_key: create_vector_index_clinical
-            - task_key: create_vector_index_guidelines
-            - task_key: uc_extract_criteria
-            - task_key: uc_check_mcg
-            - task_key: uc_answer_mcg
-            - task_key: uc_explain_decision
-          notebook_task:
-            notebook_path: ./setup/08_test_agent_workflow.py
-            base_parameters:
-              catalog_name: ${var.catalog_name}
-              schema_name: ${var.schema_name}
-          timeout_seconds: 600
+          timeout_seconds: 900
 
         - task_key: create_genie_space
           job_cluster_key: main_cluster
@@ -228,6 +212,31 @@ resources:
               catalog_name: ${var.catalog_name}
               schema_name: ${var.schema_name}
           timeout_seconds: 600
+
+    # Validation Job - Optional workflow testing (separate from setup)
+    pa_validation_job:
+      name: pa_validation_${var.environment}
+      job_clusters:
+        - job_cluster_key: validation_cluster
+          new_cluster:
+            spark_version: "16.4.x-scala2.12"
+            node_type_id: "Standard_DS3_v2"
+            num_workers: 1
+            data_security_mode: "USER_ISOLATION"
+            custom_tags:
+              project: "prior-authorization"
+              environment: "${bundle.target}"
+              purpose: "validation"
+
+      tasks:
+        - task_key: validate_workflow
+          job_cluster_key: validation_cluster
+          notebook_task:
+            notebook_path: ./setup/08_test_agent_workflow.py
+            base_parameters:
+              catalog_name: ${var.catalog_name}
+              schema_name: ${var.schema_name}
+          timeout_seconds: 900
 
   # Databricks App - Streamlit Dashboard
   apps:

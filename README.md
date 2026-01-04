@@ -19,20 +19,7 @@ An intelligent prior authorization system using LangGraph agents, Unity Catalog 
 
 ---
 
-## 📖 Architecture Documentation
-
-**NEW!** Comprehensive documentation on real-world data flows and system architecture:
-
-📁 **[docs/architecture/](docs/architecture/)** - Complete architecture documentation
-- 🌐 **[REAL_WORLD_DATA_FLOWS.md](docs/architecture/REAL_WORLD_DATA_FLOWS.md)** - How data enters the PA system
-  - Clinical Records (FHIR, HL7, Claims Attachments, C-CDA)
-  - PA Requests (Provider Portals, EMR Integration, EDI 278)
-  - Guidelines (MCG, InterQual, Medicare APIs)
-  - Complete end-to-end flow with diagrams
-
----
-
-## 🚀 Quick Start (2 Steps)
+## 🚀 Quick Start (2 Steps, ~35 minutes total)
 
 ### **Step 1: Configure** (2 minutes)
 
@@ -64,7 +51,7 @@ environments:
 
 ---
 
-### **Step 2: Deploy Everything** (15-20 minutes - automated!)
+### **Step 2: Deploy Everything** (~15 minutes - automated!)
 
 **Option A: One-Command Deploy** (Recommended ⭐)
 
@@ -79,8 +66,15 @@ This automatically does **everything**:
 4. ✅ Runs setup job (creates catalog, tables, UC functions, TWO vector indexes, sample data)
 5. ✅ Grants service principal permissions
 6. ✅ Deploys app source code
+7. 🧪 Runs validation tests (optional - doesn't block)
 
-**⏱️ Total time:** ~15-20 minutes (vector index sync takes longest)
+**⏱️ Total time:** ~12-17 minutes (validation runs in parallel)
+
+**To skip validation tests:**
+```bash
+# Edit deploy_with_config.sh and comment out Step 7
+# Or let them run - they don't block deployment
+```
 
 ---
 
@@ -101,6 +95,10 @@ databricks bundle run pa_setup_job --target dev --profile DEFAULT_azure
 
 # 5. Deploy app source code
 ./deploy_app_source.sh dev
+
+# 6. Run validation tests (optional - doesn't block deployment)
+./run_validation.sh dev
+# OR skip validation entirely - your app works without it
 ```
 
 ---
@@ -110,6 +108,13 @@ databricks bundle run pa_setup_job --target dev --profile DEFAULT_azure
 Your app will be available at: `https://your-workspace.azuredatabricks.net/apps/pa-dashboard-dev`
 
 **📖 Note:** Per [Microsoft Databricks documentation](https://learn.microsoft.com/en-us/azure/databricks/dev-tools/bundles/apps-tutorial#deploy-the-app-to-the-workspace), deploying a bundle doesn't automatically deploy the app to compute. That's why we run `deploy_app_source.sh` as a separate step to deploy the app source code from the bundle workspace location.
+
+**⏱️ Wait for vector indexes to sync** (~15-30 minutes after deployment)
+- Go to: **Databricks UI → Catalog → Vector Search**
+- Monitor: `pa_clinical_records_index` and `pa_guidelines_index`
+- Wait for status: **ONLINE**
+
+**Total time from zero to fully operational**: ~35-50 minutes
 
 ---
 
@@ -124,17 +129,335 @@ When you run the commands above, the system automatically:
    - **Demo patients:** PT00001, PT00016, PT00025 with MCG-relevant detailed clinical data
 5. ✅ Generates synthetic MCG and InterQual guidelines
 6. ✅ Generates synthetic PA requests
-   - **5 demo requests:** PA000001-PA000005 ready for queue workflow
-7. ✅ Creates **4 UC AI functions** (check MCG, answer question, explain decision, extract criteria)
+   - **10 demo requests:** PA000001-PA000010 ready for queue workflow
+7. ✅ Creates **7 UC AI functions** (authorize, check MCG, answer question, explain decision, extract criteria, search clinical, search guidelines)
 8. ✅ Creates **TWO vector search indexes**:
    - **Vector Store 1**: Clinical Documents (patient records)
    - **Vector Store 2**: Guidelines (MCG, InterQual, Medicare)
 9. ✅ Deploys Streamlit app with 3 pages
 10. ✅ Grants all necessary permissions
+11. 🧪 Runs validation tests (optional - doesn't block deployment)
 
-**Total time**: ~25-30 minutes (includes cleanup + setup + vector index sync)
+**Total time**: ~12-17 minutes (includes cleanup + setup + optional validation)
 
 **Note:** The setup job starts with a cleanup task to ensure a completely fresh environment every time!
+
+### **Complete Deployment Flow**
+
+When you run `./deploy_with_config.sh dev`, here's the complete end-to-end flow including all scripts:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                   COMPLETE DEPLOYMENT FLOW (7 Steps)                            │
+│                   Script: ./deploy_with_config.sh dev                           │
+└─────────────────────────────────────────────────────────────────────────────────┘
+
+╔═══════════════════════════════════════════════════════════════════════════════╗
+║  STEP 1: Pre-Flight Checks                                        (~10 sec)   ║
+╚═══════════════════════════════════════════════════════════════════════════════╝
+                    ┌──────────────────────────┐
+                    │ • Check Databricks CLI   │
+                    │ • Validate config.yaml   │
+                    │ • Update notebook versions│
+                    └────────────┬─────────────┘
+                                 │
+╔═══════════════════════════════════════════════════════════════════════════════╗
+║  STEP 2: Generate App Config                                      (~5 sec)    ║
+╚═══════════════════════════════════════════════════════════════════════════════╝
+                    ┌──────────────────────────┐
+                    │ python generate_app_yaml │
+                    │ • Reads config.yaml      │
+                    │ • Creates app.yaml       │
+                    └────────────┬─────────────┘
+                                 │
+╔═══════════════════════════════════════════════════════════════════════════════╗
+║  STEP 3: Deploy Infrastructure                                    (~30 sec)   ║
+╚═══════════════════════════════════════════════════════════════════════════════╝
+                    ┌──────────────────────────┐
+                    │ databricks bundle deploy │
+                    │ • Creates app definition │
+                    │ • Creates job definitions│
+                    │ • Uploads files to WS    │
+                    └────────────┬─────────────┘
+                                 │
+╔═══════════════════════════════════════════════════════════════════════════════╗
+║  STEP 4: Run Setup Job (pa_setup_job)                         (~12-15 min)   ║
+╚═══════════════════════════════════════════════════════════════════════════════╝
+         ┌────────────────────────┴────────────────────────┐
+         │        databricks bundle run pa_setup_job       │
+         └────────────────────────┬────────────────────────┘
+                                  │
+              ┌───────────────────┼───────────────────┐
+              │                   │                   │
+              ▼                   ▼                   ▼
+    ┌─────────────────┐  ┌──────────────┐  ┌────────────────┐
+    │  1. CLEANUP     │  │ 2. CREATE    │  │ 3-6. GENERATE  │
+    │  • Drop catalog │→ │    CATALOG   │→ │ • Clinical     │
+    │  • Drop indexes │  │ • Create     │  │ • Guidelines   │
+    │  • Clean state  │  │   schema     │  │ • Chunk both   │
+    └─────────────────┘  └──────────────┘  └────────┬───────┘
+                                                     │
+              ┌──────────────────────────────────────┼─────────────┐
+              │                                      │             │
+              ▼                                      ▼             ▼
+    ┌──────────────────┐                 ┌─────────────────────────────┐
+    │ 7-11. CREATE UC  │                 │ 12-13. CREATE VECTOR INDEXES│
+    │      FUNCTIONS   │                 │ • Clinical records index    │
+    │ • authorize      │                 │ • Guidelines index          │
+    │ • extract        │                 │ (~8 min each, parallel)     │
+    │ • check_mcg      │                 └──────────────┬──────────────┘
+    │ • answer_mcg     │                                │
+    │ • explain        │                                │
+    │ • search_clinical│                                │
+    │ • search_guide   │                                │
+    └────────┬─────────┘                                │
+             │              ┌──────────────────────────┘
+             └──────────────┤
+                            ▼
+                 ┌────────────────────┐
+                 │ 14. CREATE GENIE   │
+                 │     SPACE          │
+                 │ • Analytics setup  │
+                 └──────────┬─────────┘
+                            │
+                            ▼
+                 ┌────────────────────┐
+                 │ ✅ SETUP COMPLETE  │
+                 └──────────┬─────────┘
+                            │
+╔═══════════════════════════════════════════════════════════════════════════════╗
+║  STEP 5: Grant Permissions (grant_permissions.sh)                (~30 sec)   ║
+╚═══════════════════════════════════════════════════════════════════════════════╝
+                            │
+                 ┌──────────▼─────────────────┐
+                 │ Get service principal ID   │
+                 │ from deployed app          │
+                 └──────────┬─────────────────┘
+                            │
+         ┌──────────────────┼──────────────────┐
+         │                  │                  │
+         ▼                  ▼                  ▼
+    ┌─────────┐      ┌──────────┐      ┌──────────┐
+    │ CATALOG │      │  SCHEMA  │      │ WAREHOUSE│
+    │ • USE   │      │ • USE    │      │ • CAN_USE│
+    │ CATALOG │      │ • SELECT │      │          │
+    └─────────┘      │ • MODIFY │      └──────────┘
+                     └──────────┘
+         │                  │                  │
+         └──────────────────┼──────────────────┘
+                            │
+                 ┌──────────▼─────────────────┐
+                 │ Grant function EXECUTE     │
+                 │ • All 7 UC functions       │
+                 └──────────┬─────────────────┘
+                            │
+╔═══════════════════════════════════════════════════════════════════════════════╗
+║  STEP 6: Deploy App Source (deploy_app_source.sh)                (~30 sec)   ║
+╚═══════════════════════════════════════════════════════════════════════════════╝
+                            │
+                 ┌──────────▼─────────────────┐
+                 │ databricks apps deploy     │
+                 │ • Copies source code from  │
+                 │   bundle workspace location│
+                 │ • Starts app compute       │
+                 │ • App status: RUNNING      │
+                 └──────────┬─────────────────┘
+                            │
+╔═══════════════════════════════════════════════════════════════════════════════╗
+║  STEP 7: Validation Tests (OPTIONAL, non-blocking)              (~5-10 min)  ║
+╚═══════════════════════════════════════════════════════════════════════════════╝
+                            │ (continues even if validation fails)
+                            │
+                 ┌──────────▼─────────────────┐
+                 │ databricks bundle run      │
+                 │ pa_validation_job          │
+                 │ • Test UC functions        │
+                 │ • Test agent workflow      │
+                 │ • 10 test scenarios        │
+                 └──────────┬─────────────────┘
+                            │
+                            ▼
+              ╔═══════════════════════════╗
+              ║  🎉 DEPLOYMENT COMPLETE!  ║
+              ║                           ║
+              ║  App URL:                 ║
+              ║  https://your-workspace   ║
+              ║    .azuredatabricks.net   ║
+              ║    /apps/pa-dashboard-dev ║
+              ╚═══════════════════════════╝
+                            │
+                            │ (Background process)
+                            ▼
+              ┌─────────────────────────────┐
+              │ Vector Indexes Sync         │
+              │ • Initial sync: 15-30 min   │
+              │ • Status: PROVISIONING →    │
+              │           ONLINE            │
+              └─────────────────────────────┘
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TOTAL TIME BREAKDOWN:
+  • Pre-flight + Config:         ~15 seconds
+  • Infrastructure Deploy:        ~30 seconds
+  • Setup Job (14 tasks):         ~12-15 minutes  ⬅ LONGEST STEP
+  • Grant Permissions:            ~30 seconds
+  • Deploy App Source:            ~30 seconds
+  • Validation (optional):        ~5-10 minutes (parallel, doesn't block)
+  ────────────────────────────────────────────────
+  TOTAL TO RUNNING APP:           ~14-17 minutes
+  TOTAL WITH VALIDATION:          ~14-17 minutes (runs in background)
+  VECTOR INDEX SYNC (background): +15-30 minutes
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+```
+
+---
+
+### **Deployment Task Flow (Step 4 Detail)**
+
+The setup job runs 14 tasks in parallel where possible (validation moved to separate job). Here's the execution flow:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                          DEPLOYMENT TASK FLOW (14 Tasks)                       │
+└─────────────────────────────────────────────────────────────────────────────────┘
+
+                              ┌──────────────────┐
+                              │  START DEPLOY    │
+                              └────────┬─────────┘
+                                       │
+                                       ▼
+                              ┌──────────────────┐
+                              │  1. CLEANUP      │  (~1 min)
+                              │  Delete existing │
+                              │  resources       │
+                              └────────┬─────────┘
+                                       │
+                                       ▼
+                              ┌─────────────────────────┐
+                              │  2. CREATE CATALOG      │  (~1 min)
+                              │     & SCHEMA            │
+                              │  Unity Catalog + main   │
+                              └────────┬────────────────┘
+                                       │
+                    ┌──────────────────┼──────────────────┐
+                    │                  │                  │
+        ┌───────────▼────────┐    ┌───▼──────────┐  ┌───▼──────────┐
+        │ 3. Generate        │    │ 4. Generate  │  │ UC Functions │
+        │    Clinical Docs   │    │    Guidelines│  │ (Tasks 8-11) │
+        │ • Patient records  │    │ • MCG docs   │  │              │
+        │ • Labs, imaging    │    │ • InterQual  │  │ 8. extract   │
+        └───────────┬────────┘    └───┬──────────┘  │ 10. answer   │
+                    │                 │             │ 11. explain  │
+                    │                 │             └───┬──────────┘
+                    │                 │                 │
+                    ▼                 ▼                 │
+        ┌───────────────────┐    ┌───────────────┐    │
+        │ 5. Chunk Clinical │    │ 6. Chunk      │    │
+        │    Records        │    │    Guidelines │    │
+        │ Split for search  │    │ Split for     │    │
+        └───────┬───────────┘    │    search     │    │
+                │                └───┬───────────┘    │
+                │                    │                │
+                │         ┌──────────┼────────────┐   │
+                │         │          │            │   │
+                ▼         ▼          ▼            ▼   │
+        ┌────────────┐  ┌────────────┐  ┌────────────┐
+        │12. Vector  │  │13. Vector  │  │ 9. UC Func │
+        │   Clinical │  │   Guidelines│ │   check_mcg│
+        │   Index    │  │   Index    │  │            │
+        │ (~8 min)   │  │ (~8 min)   │  │            │
+        └─────┬──────┘  └─────┬──────┘  └─────┬──────┘
+              │               │               │
+              │    ┌──────────┴──────────┐    │
+              │    │                     │    │
+              ▼    ▼                     ▼    ▼
+        ┌──────────────────────────────────────┐
+        │     7. Generate PA Requests          │
+        │  • 10 demo authorization requests    │
+        │  • Links patients to procedures      │
+        └─────────────────┬────────────────────┘
+                          │
+                          ▼
+                ┌───────────────────┐
+                │ 14. Create Genie  │
+                │     Space         │
+                │  Analytics setup  │
+                └─────────┬─────────┘
+                          │
+        ┌─────────────────┼──────────────────┬─────────┐
+        │                 │                  │         │
+        ▼                 ▼                  ▼         ▼
+   [Vector Clin]   [Vector Guide]      [UC Funcs]  [Genie]
+        │                 │                  │         │
+        └─────────────────┴──────────────────┴─────────┘
+                          │
+                          ▼
+                ┌─────────────────────┐
+                │  ✅ SETUP COMPLETE  │  (~12-15 min total)
+                └─────────┬───────────┘
+                          │
+                          │ (optional, non-blocking)
+                          ▼
+                ┌─────────────────────┐
+                │ 🧪 pa_validation_job│
+                │  Separate workflow  │
+                │  • Test UC funcs    │
+                │  • Test agent flow  │
+                │  (~5-10 min)        │
+                └─────────────────────┘
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Key Parallelization:
+  • Tasks 3, 4, 8, 10, 11 run in PARALLEL after task 2
+  • Tasks 12 & 13 (vector indexes) run in PARALLEL (~8 min each, longest path)
+  • Task 7 waits for both 5 & 6 (needs both chunked datasets)
+  • Validation runs SEPARATELY and doesn't block deployment
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+```
+
+**Parallel Execution:**
+- Tasks 3-11 can run in parallel after catalog creation
+- Vector indexes (12-13) build simultaneously
+- UC functions (8-11) deploy concurrently
+- Validation runs separately and doesn't block deployment
+
+**Critical Path:** Cleanup → Create Catalog → Generate & Chunk Data → Vector Indexes → Complete (~12-15 minutes)
+
+**Validation:** Optional workflow testing runs after deployment completes (~5-10 minutes, doesn't block app)
+
+---
+
+## 🧪 Validation Testing
+
+The system includes comprehensive validation tests that verify the complete PA workflow end-to-end.
+
+### **What's Tested**
+
+- ✅ UC function behavior (check_mcg_guidelines, answer_mcg_question, explain_decision)
+- ✅ End-to-end PA request processing with real patient data
+- ✅ Decision logic thresholds (APPROVED ≥80%, DENIED <60%, MANUAL_REVIEW 60-80%)
+- ✅ Multiple patient scenarios (10 test cases covering approved, denied, and manual review)
+
+### **Running Validation Tests**
+
+**Automatic (during deployment):**
+```bash
+./deploy_with_config.sh dev  # Validation runs at the end (doesn't block)
+```
+
+**Manual (anytime):**
+```bash
+./run_validation.sh dev
+```
+
+**Via Databricks CLI:**
+```bash
+databricks bundle run pa_validation_job --target dev --profile DEFAULT_azure
+```
+
+**Expected Runtime:** ~5-10 minutes
+
+**Note:** Your app works perfectly without validation tests passing! Validation is for testing and quality assurance only. If tests fail, check the job logs in Databricks UI → Workflows → Jobs → `pa_validation_dev`.
 
 ---
 
@@ -162,6 +485,149 @@ When you run the commands above, the system automatically:
 - 🏠 Home - Overview and architecture
 - 📊 Authorization Review - Real-time PA analysis
 - 📈 Analytics Dashboard - Approval rates and trends
+
+---
+
+## 🏗️ Architecture & Data Flow
+
+### **Two Vector Stores**
+
+1. **Vector Store 1 (Clinical Documents)**: Patient records, labs, imaging, therapy notes
+   - Purpose: Answer MCG/InterQual questionnaire questions automatically
+   - Indexed by: patient_id, date, clinical_concepts
+
+2. **Vector Store 2 (Guidelines)**: MCG, InterQual, Medicare policies
+   - Purpose: Route to appropriate guideline system and validate decisions
+   - Indexed by: procedure_code, diagnosis_code, specialty, platform
+
+### **Seven UC AI Functions**
+
+- **authorize_request**: Final approval decision
+- **extract_clinical_criteria**: Parse unstructured notes
+- **check_mcg_guidelines**: Retrieve MCG questionnaire
+- **answer_mcg_question**: Answer specific questions
+- **explain_decision**: Generate explanations
+- **search_clinical_records**: Search patient data
+- **search_guidelines**: Search MCG/InterQual
+
+### **End-to-End Data Flow**
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                     PRIOR AUTHORIZATION WORKFLOW                        │
+└─────────────────────────────────────────────────────────────────────────┘
+
+Step 1: Data Ingestion
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   Medical Records (EHR)                    MCG/InterQual Guidelines
+         ├─ Clinical Notes                       ├─ MCG Questionnaires
+         ├─ Lab Results                          ├─ InterQual Criteria
+         ├─ Imaging Reports                      └─ Medicare Policies
+         ├─ Physical Therapy Notes                     │
+         └─ Medications                                │
+               │                                       │
+               ▼                                       ▼
+   ┌────────────────────────┐          ┌────────────────────────┐
+   │  Vector Store 1        │          │  Vector Store 2        │
+   │  (Clinical Documents)  │          │  (Guidelines)          │
+   │  • Semantic Search     │          │  • Semantic Search     │
+   │  • Patient Data        │          │  • MCG/InterQual       │
+   └────────────────────────┘          └────────────────────────┘
+               │                                       │
+               └───────────────┬───────────────────────┘
+                               │
+Step 2: PA Request Processing  │
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━▼━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+                    ┌──────────────────────┐
+                    │   PA Request         │
+                    │   • Patient ID       │
+                    │   • Procedure Code   │
+                    │   • Diagnosis        │
+                    └──────────┬───────────┘
+                               │
+                               ▼
+                    ┌──────────────────────┐
+                    │  LangGraph Agent     │
+                    │  (ReAct Pattern)     │
+                    │  • Reasoning         │
+                    │  • Tool Selection    │
+                    └──────────┬───────────┘
+                               │
+Step 3: Intelligent Routing    │
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━▼━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+              Agent calls check_mcg_guidelines()
+                               │
+                               ▼
+                    ┌──────────────────────┐
+                    │  Get MCG Questions   │
+                    │  (from Vector 2)     │
+                    │  • Q1, Q2, Q3...     │
+                    └──────────┬───────────┘
+                               │
+Step 4: Answer Questions       │
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━▼━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+              Agent calls answer_mcg_question() for each Q
+                               │
+                    ┌──────────▼───────────┐
+                    │ Search Vector 1      │
+                    │ (Patient Records)    │
+                    │ • Find Evidence      │
+                    │ • Answer: YES/NO     │
+                    └──────────┬───────────┘
+                               │
+                    ┌──────────▼───────────┐
+                    │ Q1: YES (Lab: WBC=14)│
+                    │ Q2: NO  (No fracture)│
+                    │ Q3: YES (PT notes)   │
+                    └──────────┬───────────┘
+                               │
+Step 5: Decision & Explanation │
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━▼━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+              Agent calls authorize_request()
+                               │
+                    ┌──────────▼───────────┐
+                    │  Calculate Score     │
+                    │  • Confidence: 85%   │
+                    │  • Decision: APPROVE │
+                    └──────────┬───────────┘
+                               │
+              Agent calls explain_decision()
+                               │
+                    ┌──────────▼───────────┐
+                    │  Generate Explanation│
+                    │  • MCG Code 123      │
+                    │  • Evidence Summary  │
+                    │  • Reasoning Trace   │
+                    └──────────┬───────────┘
+                               │
+                               ▼
+                    ┌──────────────────────┐
+                    │  FINAL DECISION      │
+                    │  ✅ APPROVED (85%)   │
+                    │  📋 Full Audit Trail │
+                    └──────────────────────┘
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Processing Time: 3-5 minutes  |  Human Review Time Saved: 2-7 days
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+```
+
+---
+
+## 💰 Business Impact
+
+### **For Typical Deployment (10,000 PAs/year)**
+- **95% faster**: 2-7 days → 3-5 minutes per PA
+- **96% cost reduction**: $75-125 → $2-5 per PA
+- **$1.6M+ annual savings**
+- **3.5 FTE nurses** freed for complex cases
+- **60-70% auto-approval rate** (>90% confidence)
+
+### **At Industry Scale (17.7M PAs/year)**
+- **$1.68 billion annual savings**
+- **6,000+ nurses** redeployed to high-value work
+- **10-hour payback period**
+- **Universal healthcare impact**
 
 ---
 
@@ -198,116 +664,14 @@ Deploy to different environments:
 
 ```bash
 # Dev
-python generate_app_yaml.py dev
-databricks bundle deploy --target dev
+./deploy_with_config.sh dev
 
 # Staging
-python generate_app_yaml.py staging
-databricks bundle deploy --target staging
+./deploy_with_config.sh staging
 
 # Prod
-python generate_app_yaml.py prod
-databricks bundle deploy --target prod
+./deploy_with_config.sh prod
 ```
-
----
-
-## 📖 Detailed Instructions
-
-### **Prerequisites**
-
-1. **Databricks Workspace** (Azure, AWS, or GCP)
-2. **Unity Catalog** enabled
-3. **SQL Warehouse** created (Serverless or Pro)
-4. **Vector Search Endpoint** created (`one-env-shared-endpoint-2`)
-5. **Foundation Model Endpoint** access (`databricks-claude-sonnet-4-5`)
-6. **Databricks CLI** installed and configured
-   ```bash
-   databricks --version  # Should show version
-   ```
-
-### **Initial Setup**
-
-1. **Clone the repository**
-   ```bash
-   git clone <repository>
-   cd healthcare-payer-pa-withmcg-guidelines
-   ```
-
-2. **Configure Databricks CLI** (if not already done)
-   ```bash
-   databricks configure --profile DEFAULT_azure
-   ```
-   
-   Enter:
-   - Host: `https://your-workspace.azuredatabricks.net`
-   - Token: Your personal access token
-
-3. **Edit config.yaml**
-   ```bash
-   vim config.yaml
-   ```
-   
-   Update:
-   - `workspace_host` - Your workspace URL
-   - `warehouse_id` - Your SQL Warehouse ID
-   - `catalog` - Catalog name (or leave default)
-   - `vector_endpoint` - Your vector search endpoint name
-   - `llm_endpoint` - Your LLM endpoint name
-   - `app_name` - Your app name
-   - `profile` - Profile name from step 2
-
-4. **🚀 Deploy everything with one command**
-   ```bash
-   ./deploy_with_config.sh dev
-   ```
-   
-   This automated script does everything:
-   - ✅ Generates `dashboard/app.yaml` from `config.yaml`
-   - ✅ Deploys infrastructure (jobs, app definition)
-   - ✅ Runs setup notebooks (creates catalog, tables, functions, data, TWO vector indexes)
-   - ✅ Grants service principal permissions
-   - ✅ Deploys app source code
-   
-   **Alternative: Manual step-by-step deployment**
-   
-   If you prefer to run each step individually:
-   
-   ```bash
-   # Step 1: Generate app.yaml
-   python generate_app_yaml.py dev
-   
-   # Step 2: Deploy infrastructure (creates app and job definitions)
-   databricks bundle deploy --target dev --profile DEFAULT_azure
-   
-  # Step 3: Run setup job (creates catalog, tables, functions, data, vector indexes)
-  # This includes automatic cleanup first!
-  databricks bundle run pa_setup_job --target dev --profile DEFAULT_azure
-   
-   # Step 4: Grant service principal permissions
-   ./grant_permissions.sh dev
-   
-   # Step 5: Deploy app source code from bundle location
-   ./deploy_app_source.sh dev
-   ```
-   
-   **Important:** Per [Microsoft documentation](https://learn.microsoft.com/en-us/azure/databricks/dev-tools/bundles/apps-tutorial#deploy-the-app-to-the-workspace), `databricks bundle deploy` creates the app infrastructure but does **not** automatically deploy the source code to compute. Step 5 explicitly deploys the app source code from the bundle workspace location using `databricks apps deploy`.
-
-5. **⏱️ Wait for vector indexes to sync** (15-30 minutes)
-   
-   The vector indexes need time to sync after creation:
-   - Go to: **Databricks UI → Catalog → Vector Search**
-   - Monitor: `pa_clinical_records_index` and `pa_guidelines_index`
-   - Wait for status: **ONLINE**
-
-6. **Access your app**
-   
-   The app URL will be shown after deployment:
-   ```
-   https://your-workspace.azuredatabricks.net/apps/pa-dashboard-dev
-   ```
-   
-   Wait 30-60 seconds for the app to start, then open the URL in your browser.
 
 ---
 
@@ -336,8 +700,11 @@ You should see:
 - **Schema**: `main`
 - **Tables**: 
   - `patient_clinical_records`
+  - `patient_clinical_records_chunked`
   - `clinical_guidelines`
+  - `clinical_guidelines_chunked`
   - `authorization_requests`
+  - `pa_audit_trail`
 - **Functions**: 7 AI functions (authorize_request, extract_clinical_criteria, etc.)
 - **Vector Indexes**: 2 indexes (clinical records, guidelines)
 - **App**: `pa-dashboard-dev` (status: RUNNING)
@@ -376,7 +743,7 @@ databricks grants update catalog healthcare_payer_pa_withmcg_guidelines_dev \
 
 # Grant schema access
 databricks grants update schema healthcare_payer_pa_withmcg_guidelines_dev.main \
-  --json "{\"changes\": [{\"principal\": \"$SP_ID\", \"add\": [\"USE_SCHEMA\", \"SELECT\"]}]}" \
+  --json "{\"changes\": [{\"principal\": \"$SP_ID\", \"add\": [\"USE_SCHEMA\", \"SELECT\", \"MODIFY\"]}]}" \
   --profile DEFAULT_azure
 
 # Grant warehouse access (replace with your warehouse ID)
@@ -433,70 +800,6 @@ The setup notebooks check for existing resources and skip creation if they exist
 
 ---
 
-## 📁 Project Structure
-
-```
-healthcare-payer-pa-withmcg-guidelines/
-├── config.yaml                  # ⭐ Configuration (edit this)
-├── generate_app_yaml.py         # ⭐ Generator script (run this)
-├── databricks.yml               # Databricks Asset Bundle config
-├── deploy_with_config.sh        # ⭐ One-command deployment script
-├── deploy_app_source.sh         # App deployment script
-├── grant_permissions.sh         # Permission management script
-├── update_notebook_version.py   # Automatic notebook versioning
-├── CHEATSHEET.md                # Quick reference commands
-│
-├── shared/
-│   ├── __init__.py
-│   └── config.py                # Config loader for notebooks
-│
-├── setup/                       # Setup notebooks (run by DAB)
-│   ├── 00_CLEANUP.py
-│   ├── 01_create_catalog_schema.py
-│   ├── 02_generate_clinical_data.py
-│   ├── 03_generate_guidelines_data.py
-│   ├── 04_generate_pa_requests.py
-│   ├── 05_create_vector_index_clinical.py
-│   ├── 06_create_vector_index_guidelines.py
-│   ├── 07_create_uc_functions.py
-│   └── 08_test_agent_workflow.py
-│
-├── src/
-│   └── agent/
-│       └── pa_agent.py          # LangGraph agent implementation
-│
-├── dashboard/                   # Streamlit application
-│   ├── app.yaml                 # Auto-generated (don't edit)
-│   ├── app.py                   # Main app
-│   ├── requirements.txt         # Dependencies
-│   └── pages/                   # Streamlit pages
-│       ├── 1_authorization_review.py
-│       ├── 2_analytics_dashboard.py
-│       └── 3_bulk_processing.py
-│
-├── notebooks/
-│   └── 01_pa_agent.py           # Interactive agent demo
-│
-└── docs/                        # Documentation (gitignored)
-    ├── PROJECT_DISCUSSION_LOG.md
-    ├── PROJECT_SCOPE.md
-    ├── FHIR_EXPLANATION.md
-    ├── HUMANA_CMS_2027_COMPLIANCE.md
-    ├── COMPLETE_STUDY_GUIDE.md
-    └── ...
-```
-
----
-
-## 🎓 Learn More
-
-- **📝 Quick Commands**: See [CHEATSHEET.md](CHEATSHEET.md) - Most common commands
-- **🏗️ Architecture**: See project structure above
-- **🔄 Versioning**: Automatic notebook version updates during deployment
-- **🛠️ Troubleshooting**: See troubleshooting section above
-
----
-
 ## 🧹 Cleanup & Testing
 
 ### **Complete Cleanup** (Start Fresh)
@@ -530,6 +833,9 @@ Perfect for testing before demos or validating changes:
 
 # Step 4: Test the app
 # Open: https://your-workspace.azuredatabricks.net/apps/pa-dashboard-dev
+
+# Step 5: Run validation tests (optional)
+./run_validation.sh dev
 ```
 
 ### **Expected Timeline**
@@ -537,56 +843,78 @@ Perfect for testing before demos or validating changes:
 | Phase | Time | Details |
 |-------|------|---------|
 | **Cleanup** | ~1-2 minutes | Delete catalog, indexes, volumes |
-| **Fresh Deployment** | ~15-20 minutes | Setup job + vector sync |
-| **Total** | **~17-22 minutes** | Full end-to-end cycle |
+| **Fresh Deployment** | ~12-15 minutes | Setup job completes |
+| **Validation** | ~5-10 minutes | Optional workflow tests |
+| **Vector Index Sync** | ~15-30 minutes | Background process |
+| **Total** | **~13-17 minutes** | For full deployment (+ 15-30 min for vector sync) |
 
 ---
 
-## 💰 Business Impact
+## 📁 Project Structure
 
-### **For Typical Deployment (10,000 PAs/year)**
-- **95% faster**: 2-7 days → 3-5 minutes per PA
-- **96% cost reduction**: $75-125 → $2-5 per PA
-- **$1.6M+ annual savings**
-- **3.5 FTE nurses** freed for complex cases
-- **60-70% auto-approval rate** (>90% confidence)
-
-### **At Industry Scale (17.7M PAs/year)**
-- **$1.68 billion annual savings**
-- **6,000+ nurses** redeployed to high-value work
-- **10-hour payback period**
-- **Universal healthcare impact**
+```
+healthcare-payer-pa-withmcg-guidelines/
+├── config.yaml                  # ⭐ Configuration (edit this)
+├── generate_app_yaml.py         # ⭐ Generator script (run this)
+├── databricks.yml               # Databricks Asset Bundle config
+├── deploy_with_config.sh        # ⭐ One-command deployment script
+├── deploy_app_source.sh         # App deployment script
+├── grant_permissions.sh         # Permission management script
+├── run_validation.sh            # ⭐ Validation testing script
+├── update_notebook_version.py   # Automatic notebook versioning
+├── CHEATSHEET.md                # Quick reference commands
+│
+├── shared/
+│   ├── __init__.py
+│   └── config.py                # Config loader for notebooks
+│
+├── setup/                       # Setup notebooks (run by DAB)
+│   ├── 00_CLEANUP.py
+│   ├── 01_create_catalog_schema.py
+│   ├── 02_generate_clinical_data.py
+│   ├── 03_generate_guidelines_data.py
+│   ├── 04_generate_pa_requests.py
+│   ├── 05a_chunk_clinical_records.py
+│   ├── 05b_chunk_guidelines.py
+│   ├── 06a_create_vector_index_clinical.py
+│   ├── 06b_create_vector_index_guidelines.py
+│   ├── 07a_uc_authorize_request.py
+│   ├── 07b_uc_extract_criteria.py
+│   ├── 07c_uc_check_mcg.py
+│   ├── 07d_uc_answer_mcg.py
+│   ├── 07e_uc_explain_decision.py
+│   ├── 07f_uc_search_functions.py
+│   ├── 08_test_agent_workflow.py    # Runs in pa_validation_job
+│   └── 09_create_genie_space.py
+│
+├── src/
+│   └── agent/
+│       └── pa_agent.py          # LangGraph agent implementation
+│
+├── dashboard/                   # Streamlit application
+│   ├── app.yaml                 # Auto-generated (don't edit)
+│   ├── app.py                   # Main app
+│   ├── requirements.txt         # Dependencies
+│   └── pages/                   # Streamlit pages
+│       ├── 1_authorization_review.py
+│       ├── 2_analytics_dashboard.py
+│       └── 3_bulk_processing.py
+│
+├── notebooks/
+│   └── 01_pa_agent.py           # Interactive agent demo
+│
+└── docs/                        # Documentation (gitignored)
+    └── ...
+```
 
 ---
 
-## 🏗️ Architecture Highlights
+## 🎓 Learn More
 
-### **Two Vector Stores**
-1. **Vector Store 1 (Clinical Documents)**: Patient records, labs, imaging, therapy notes
-   - Purpose: Answer MCG/InterQual questionnaire questions automatically
-   - Indexed by: patient_id, date, clinical_concepts
-
-2. **Vector Store 2 (Guidelines)**: MCG, InterQual, Medicare policies
-   - Purpose: Route to appropriate guideline system and validate decisions
-   - Indexed by: procedure_code, diagnosis_code, specialty, platform
-
-### **Seven UC AI Functions**
-- **authorize_request**: Final approval decision
-- **extract_clinical_criteria**: Parse unstructured notes
-- **check_mcg_guidelines**: Retrieve MCG questionnaire
-- **answer_mcg_question**: Answer specific questions
-- **explain_decision**: Generate explanations
-- **search_clinical_records**: Search patient data
-- **search_guidelines**: Search MCG/InterQual
-
-### **Data Flow**
-```
-Step 1: Medical Records (EHR) → Vector Store 1 (Clinical Documents)
-Step 2: MCG/InterQual Guidelines → Vector Store 2 (Guidelines)
-Step 3: PA Request → Agent → Route to MCG/InterQual
-Step 4: Agent queries Vector Store 1 to answer questions
-Step 5: Agent validates against Vector Store 2 → Decision
-```
+- **📝 Quick Commands**: See [CHEATSHEET.md](CHEATSHEET.md) - Most common commands
+- **🏗️ Architecture**: See project structure and data flow diagrams above
+- **🔄 Versioning**: Automatic notebook version updates during deployment
+- **🛠️ Troubleshooting**: See troubleshooting section above
 
 ---
 
@@ -599,8 +927,9 @@ Step 5: Agent validates against Vector Store 2 → Decision
 - ✅ Synthetic data demo
 - ✅ Streamlit UI (3 pages)
 - ✅ Complete deployment automation
+- ✅ Separate validation workflow
 
-### **Phase 2 (6-12 months)**
+### **Phase 2 (Future)**
 - FHIR R4 integration (CMS 2027 compliance)
 - Epic/Cerner EHR connectors
 - Production workflow automation
@@ -616,19 +945,6 @@ Step 5: Agent validates against Vector Store 2 → Decision
 - **Explainable AI** with MCG/InterQual citations
 - **Human oversight** for low-confidence decisions (<90%)
 - **CMS-ready** architecture (Phase 2 will add FHIR)
-
----
-
-## 🎉 Summary
-
-**For a new operator, the steps are**:
-
-1. Edit `config.yaml` (2 minutes)
-2. Run `./deploy_with_config.sh dev` (15-20 minutes - fully automated)
-3. Wait for vector indexes to sync (15-30 minutes)
-4. Access app at provided URL ✅
-
-**Total time**: ~35-50 minutes from zero to deployed app!
 
 ---
 
@@ -649,27 +965,6 @@ This is a production-ready prior authorization system demonstrating:
 - Vector Search (TWO indexes)
 - Claude Sonnet 4.5
 - Streamlit
-
-**Template:** Built using fraudtemplate pattern
-
----
-
-**Built with ❤️ for healthcare innovation | December 2024**
-
-- **Modern AI Architecture**: LangGraph agents + UC Functions + Vector Search
-- **Real Business Impact**: 95% faster, 96% cheaper, 60-70% auto-approval
-- **Healthcare Compliance**: MCG/InterQual integration, audit trails, explainable AI
-- **Fully Automated**: One-command deployment, complete documentation
-
-**Built with:**
-- Databricks Lakehouse Platform
-- Unity Catalog & AI Functions
-- LangGraph (LangChain)
-- Vector Search (TWO indexes)
-- Claude Sonnet 4.5
-- Streamlit
-
-**Template:** Built using fraudtemplate pattern
 
 ---
 

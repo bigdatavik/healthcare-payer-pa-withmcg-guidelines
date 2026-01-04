@@ -229,12 +229,8 @@ if 'request_status' in pa_df.columns:
 if 'processing_time_seconds' in pa_df.columns:
     pa_df = pa_df.drop(columns=['processing_time_seconds'])
 
-# Add created_at and updated_at timestamps
-pa_df['created_at'] = pa_df['request_date']  # Use request_date as created_at
-pa_df['updated_at'] = pa_df['request_date']  # Use request_date as updated_at
-
-# Note: decision, mcg_code, explanation, etc. will be added as NULL columns in Spark
-# We'll add them after converting to Spark DataFrame to ensure correct types
+# Note: created_at and updated_at will be added later as Spark columns
+# Don't add them to pandas DataFrame to avoid duplicate column issues
 
 # Convert to Spark DataFrame
 spark_df = spark.createDataFrame(pa_df)
@@ -243,13 +239,19 @@ spark_df = spark.createDataFrame(pa_df)
 from pyspark.sql.functions import col, lit
 from pyspark.sql.types import StringType, DoubleType, TimestampType
 
+# Remove procedure_code_2 if it exists (not in table schema)
+if 'procedure_code_2' in spark_df.columns:
+    spark_df = spark_df.drop('procedure_code_2')
+
 spark_df = spark_df \
     .withColumn("decision", lit(None).cast(StringType())) \
     .withColumn("decision_date", lit(None).cast(TimestampType())) \
     .withColumn("explanation", lit(None).cast(StringType())) \
     .withColumn("confidence_score", lit(None).cast(DoubleType())) \
     .withColumn("mcg_code", lit(None).cast(StringType())) \
-    .withColumn("reviewed_by", lit(None).cast(StringType()))
+    .withColumn("reviewed_by", lit(None).cast(StringType())) \
+    .withColumn("created_at", col("request_date")) \
+    .withColumn("updated_at", col("request_date"))
 
 # COMMAND ----------
 
@@ -263,7 +265,7 @@ spark.sql(f"DELETE FROM {table_name}")
 columns_ordered = [
     'request_id', 'patient_id', 'provider_id', 'procedure_code', 'procedure_description',
     'diagnosis_code', 'diagnosis_description', 'clinical_notes', 'urgency_level',
-    'insurance_plan', 'request_date', 'procedure_code_2', 'decision', 'decision_date',
+    'insurance_plan', 'request_date', 'decision', 'decision_date',
     'confidence_score', 'mcg_code', 'explanation', 'reviewed_by', 'created_at', 'updated_at'
 ]
 
@@ -289,7 +291,7 @@ SELECT
     patient_id,
     procedure_code,
     procedure_description,
-    request_status,
+    decision,
     SUBSTRING(clinical_notes, 1, 100) as notes_preview
 FROM {table_name}
 ORDER BY request_id
@@ -331,5 +333,5 @@ print(f"   APPROVED: 4 requests (PT00001, PT00016, PT00025, PT00003)")
 print(f"   MANUAL_REVIEW: 3 requests (PT00005, PT00007, PT00010)")
 print(f"   DENIED: 3 requests (PT00012, PT00018, PT00020)")
 print()
-print(f"All requests are in PENDING status and ready for processing in the app.")
+print(f"All requests have decision=NULL (PENDING) and ready for processing in the app.")
 print("=" * 80)
