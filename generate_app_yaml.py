@@ -71,6 +71,10 @@ env:
   - name: 'LLM_ENDPOINT'
     value: '{env_config['llm_endpoint']}'
   
+  # Genie Space ID (for PA Analytics page)
+  - name: 'GENIE_SPACE_ID'
+    value: '{env_config.get('genie_space_id', '')}'
+  
   # Environment identifier
   - name: 'ENVIRONMENT'
     value: '{environment}'
