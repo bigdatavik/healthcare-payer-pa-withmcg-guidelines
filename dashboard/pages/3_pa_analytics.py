@@ -362,18 +362,16 @@ if GENIE_SPACE_ID:
     Ask questions about your PA data in plain English. Genie will automatically generate SQL and return results.
     """)
     
-    # Example questions
+    # Example questions (synced with Genie Space sample_questions)
     example_questions = [
-        "Show me all approved prior authorizations",
+        "Show me all prior authorization requests",
         "What is the approval rate by procedure type?",
-        "Show manual review cases with confidence > 70%",
-        "Which procedures have highest denial rates?",
-        "Show PAs processed in last 7 days",
-        "What are the most common MCG codes used?",
-        "Compare approval rates: STAT vs ROUTINE",
-        "Show denied requests for knee procedures",
-        "What is the average confidence score by decision type?",
-        "Show high-value procedures (most requests)"
+        "Which requests are pending manual review?",
+        "Show MCG questions that were answered NO for denied requests",
+        "What clinical evidence types are most commonly cited in approvals?",
+        "Which providers have the highest manual review rate?",
+        "Show approval trends by urgency level over time",
+        "What percentage of diabetes patients get approved for procedures?"
     ]
     
     # User input

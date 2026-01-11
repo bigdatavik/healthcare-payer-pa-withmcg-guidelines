@@ -99,13 +99,51 @@ try:
                 {
                     "id": str(uuid.uuid4()).replace('-', ''),  # UUID without hyphens
                     "question": ["Which requests are pending manual review?"]
+                },
+                {
+                    "id": str(uuid.uuid4()).replace('-', ''),  # UUID without hyphens
+                    "question": ["Show MCG questions that were answered NO for denied requests"]
+                },
+                {
+                    "id": str(uuid.uuid4()).replace('-', ''),  # UUID without hyphens
+                    "question": ["What clinical evidence types are most commonly cited in approvals?"]
+                },
+                {
+                    "id": str(uuid.uuid4()).replace('-', ''),  # UUID without hyphens
+                    "question": ["Which providers have the highest manual review rate?"]
+                },
+                {
+                    "id": str(uuid.uuid4()).replace('-', ''),  # UUID without hyphens
+                    "question": ["Show approval trends by urgency level over time"]
+                },
+                {
+                    "id": str(uuid.uuid4()).replace('-', ''),  # UUID without hyphens
+                    "question": ["What percentage of diabetes patients get approved for procedures?"]
                 }
             ],
-            "instructions": f"This space analyzes prior authorization (PA) requests. The main table is {cfg.auth_requests_table} containing PA requests with decision outcomes. Use status='APPROVED/DENIED/MANUAL_REVIEW' to filter. Patient data is in {cfg.clinical_records_table} and guidelines in {cfg.guidelines_table}."
+            "instructions": f"""This space analyzes prior authorization (PA) requests across 4 tables:
+1. {cfg.auth_requests_table} - PA requests with decisions (decision: APPROVED/DENIED/MANUAL_REVIEW)
+2. {cfg.catalog}.{cfg.schema}.pa_audit_trail - MCG Q&A audit trail (join on request_id, answers: YES/NO, evidence_source types)
+3. {cfg.clinical_records_table} - Patient clinical records (join on patient_id, record_type: CLINICAL_NOTE/LAB_RESULT/IMAGING_REPORT)
+4. {cfg.guidelines_table} - Clinical guidelines (MCG/InterQual codes and criteria text)
+
+Use these relationships:
+- authorization_requests.request_id = pa_audit_trail.request_id (1:many)
+- authorization_requests.patient_id = patient_clinical_records.patient_id (1:many)
+- authorization_requests.mcg_code = clinical_guidelines.guideline_code (1:1)
+
+Common filters:
+- WHERE decision IN ('APPROVED', 'DENIED', 'MANUAL_REVIEW')
+- WHERE answer = 'NO' (for audit trail - criteria not met)
+- WHERE evidence_source IN ('CLINICAL_NOTE', 'XRAY', 'LAB_RESULT', 'PT_NOTE')
+- WHERE urgency_level IN ('STAT', 'URGENT', 'ROUTINE')"""
         },
         "data_sources": {
             "tables": [
-                {"identifier": cfg.auth_requests_table}
+                {"identifier": cfg.auth_requests_table},                           # authorization_requests
+                {"identifier": f"{cfg.catalog}.{cfg.schema}.pa_audit_trail"},     # audit trail
+                {"identifier": cfg.clinical_records_table},                        # patient_clinical_records
+                {"identifier": cfg.guidelines_table}                               # clinical_guidelines
             ]
         }
     }
