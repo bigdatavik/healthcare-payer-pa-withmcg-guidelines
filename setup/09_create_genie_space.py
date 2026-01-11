@@ -140,10 +140,10 @@ Common filters:
         },
         "data_sources": {
             "tables": [
-                {"identifier": cfg.auth_requests_table},                           # authorization_requests
-                {"identifier": f"{cfg.catalog}.{cfg.schema}.pa_audit_trail"},     # audit trail
-                {"identifier": cfg.clinical_records_table},                        # patient_clinical_records
-                {"identifier": cfg.guidelines_table}                               # clinical_guidelines
+                {"identifier": cfg.auth_requests_table},                           # authorization_requests (a)
+                {"identifier": cfg.guidelines_table},                              # clinical_guidelines (c)
+                {"identifier": f"{cfg.catalog}.{cfg.schema}.pa_audit_trail"},     # pa_audit_trail (p)
+                {"identifier": cfg.clinical_records_table}                         # patient_clinical_records (p)
             ]
         }
     }
