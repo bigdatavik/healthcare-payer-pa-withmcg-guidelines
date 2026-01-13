@@ -71,6 +71,9 @@ data/
 *.csv
 *.parquet
 
+# Claude Skills testing (isolated, temporary)
+test_claude_skill/
+
 .cursor/plans/
 
 # Fraudtemplate (template files - symlink)
@@ -141,3 +144,6 @@ dashboard/backups/
 data/
 *.csv
 *.parquet
+
+# Claude Skills testing (isolated, temporary)
+test_claude_skill/

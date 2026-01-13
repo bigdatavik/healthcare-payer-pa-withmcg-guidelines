@@ -105,7 +105,7 @@ def get_pa_statistics():
                     SUM(CASE WHEN decision = 'APPROVED' THEN 1 ELSE 0 END) as approved,
                     SUM(CASE WHEN decision = 'DENIED' THEN 1 ELSE 0 END) as denied,
                     SUM(CASE WHEN decision = 'MANUAL_REVIEW' THEN 1 ELSE 0 END) as manual_review,
-                    ROUND(AVG(confidence_score) * 100, 2) as avg_confidence,
+                    COALESCE(ROUND(AVG(confidence_score) * 100, 2), 0) as avg_confidence,
                     ROUND(100.0 * SUM(CASE WHEN decision = 'APPROVED' THEN 1 ELSE 0 END) / COUNT(*), 2) as approval_rate
                 FROM {CATALOG}.{SCHEMA}.authorization_requests
             """)
@@ -190,6 +190,7 @@ def get_confidence_distribution():
                     ROUND(confidence_score * 100, 0) as confidence_pct,
                     COUNT(*) as count
                 FROM {CATALOG}.{SCHEMA}.authorization_requests
+                WHERE confidence_score IS NOT NULL
                 GROUP BY ROUND(confidence_score * 100, 0)
                 ORDER BY confidence_pct
             """)
@@ -265,7 +266,7 @@ if stats:
         st.metric(
             "Avg AI Confidence",
             f"{stats['avg_confidence']:.1f}%",
-            help="Average AI confidence across all decisions"
+            help="Average AI confidence across all decisions (0% if no decisions yet)"
         )
 
 st.markdown("---")
